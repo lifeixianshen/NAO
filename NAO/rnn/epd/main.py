@@ -133,9 +133,7 @@ def input_fn(params, mode, data_dir, batch_size, num_epochs=1):
 
 def create_vocab_tables(vocab_file):
   """Creates vocab tables for src_vocab_file and tgt_vocab_file."""
-  vocab_table = lookup_ops.index_table_from_file(
-      vocab_file, default_value=0)
-  return vocab_table  
+  return lookup_ops.index_table_from_file(vocab_file, default_value=0)  
 
 
 def get_train_ops(encoder_train_input, encoder_train_target, decoder_train_input, decoder_train_target, params, reuse=False):
@@ -251,7 +249,7 @@ def train(params):
     tf.logging.info('Starting Session')
     config = tf.ConfigProto(allow_soft_placement=True)
     with tf.train.SingularMonitoredSession(
-      config=config, hooks=hooks, checkpoint_dir=params['model_dir']) as sess:
+          config=config, hooks=hooks, checkpoint_dir=params['model_dir']) as sess:
       writer =  tf.summary.FileWriter(params['model_dir'],sess.graph)
       start_time = time.time()
       while True:
@@ -266,14 +264,14 @@ def train(params):
           merged_summary,
         ]
         train_mse_v, train_cross_entropy_v, train_loss_v, learning_rate_v, _, global_step_v, gn_v,summary = sess.run(run_ops)
-    
+
         writer.add_summary(summary,global_step_v)
 
-        epoch = global_step_v // params['batches_per_epoch'] 
+        epoch = global_step_v // params['batches_per_epoch']
         curr_time = time.time()
         if global_step_v % 100 == 0:
-          log_string = "epoch={:<6d} ".format(epoch)
-          log_string += "step={:<6d} ".format(global_step_v)
+          log_string = "epoch={:<6d} ".format(epoch) + "step={:<6d} ".format(
+              global_step_v)
           log_string += "se={:<6f} ".format(train_mse_v)
           log_string += "cross_entropy={:<6f} ".format(train_cross_entropy_v)
           log_string += "loss={:<6f} ".format(train_loss_v)
@@ -295,14 +293,13 @@ def train(params):
             test_cross_entropy_list.append(test_cross_entropy_v.flatten())
             test_loss_list.append(test_loss_v.flatten())
             test_predict_value_list.append(test_predict_value_v.flatten())
-            test_ground_truth_value_list.append(test_ground_truth_value_v.flatten())   
+            test_ground_truth_value_list.append(test_ground_truth_value_v.flatten())
           predictions_list = np.array(test_predict_value_list).flatten()
           targets_list = np.array(test_ground_truth_value_list).flatten()
           mse = ((predictions_list -  targets_list) ** 2).mean(axis=0)
           pairwise_acc = pairwise_accuracy(targets_list, predictions_list)
           test_time = time.time() - test_start_time
-          log_string =  "Evaluation on training data\n"
-          log_string += "epoch={:<6d} ".format(epoch)
+          log_string = "Evaluation on training data\n" + "epoch={:<6d} ".format(epoch)
           log_string += "step={:<6d} ".format(global_step_v)
           log_string += "training loss={:<6f} ".format(np.mean(test_loss_list))
           log_string += "training pairwise accuracy={:<6f} ".format(pairwise_acc)
@@ -324,14 +321,13 @@ def train(params):
             test_cross_entropy_list.append(test_cross_entropy_v.flatten())
             test_loss_list.append(test_loss_v.flatten())
             test_predict_value_list.append(test_predict_value_v.flatten())
-            test_ground_truth_value_list.append(test_ground_truth_value_v.flatten())   
+            test_ground_truth_value_list.append(test_ground_truth_value_v.flatten())
           predictions_list = np.array(test_predict_value_list).flatten()
           targets_list = np.array(test_ground_truth_value_list).flatten()
           mse = ((predictions_list -  targets_list) ** 2).mean(axis=0)
           pairwise_acc = pairwise_accuracy(targets_list, predictions_list)
           test_time = time.time() - test_start_time
-          log_string =  "Evaluation on test data\n"
-          log_string += "epoch={:<6d} ".format(epoch)
+          log_string = "Evaluation on test data\n" + "epoch={:<6d} ".format(epoch)
           log_string += "step={:<6d} ".format(global_step_v)
           log_string += "test loss={:<6f} ".format(np.mean(test_loss_list))
           log_string += "test pairwise accuracy={:<6f} ".format(pairwise_acc)
@@ -353,7 +349,7 @@ def test(params):
     tf.logging.info('Starting Session')
     config = tf.ConfigProto(allow_soft_placement=True)
     with tf.train.SingularMonitoredSession(
-      config=config, checkpoint_dir=params['model_dir']) as sess:
+          config=config, checkpoint_dir=params['model_dir']) as sess:
       start_time = time.time()
       test_ops = [
         test_cross_entropy, test_loss, test_predict_value, test_ground_truth_value
@@ -378,10 +374,8 @@ def test(params):
       mse = ((predictions_list -  targets_list) ** 2).mean(axis=0)
       pairwise_acc = pairwise_accuracy(targets_list, predictions_list)
       test_time = time.time() - test_start_time
-      log_string =  "Evaluation on test data\n"
-      #log_string += "epoch={:<6d} ".format(epoch)
-      #log_string += "step={:<6d} ".format(global_step_v)
-      log_string += "test loss={:<6f} ".format(np.mean(test_loss_list))
+      log_string = "Evaluation on test data\n" + "test loss={:<6f} ".format(
+          np.mean(test_loss_list))
       log_string += "test pairwise accuracy={:<6f} ".format(pairwise_acc)
       log_string += "test mse={:<6f} ".format(mse)
       log_string += "test cross_entropy={:.<6f} ".format(np.mean(test_cross_entropy_list))
@@ -423,18 +417,18 @@ def predict(params):
     if FLAGS.predict_to_file:
       output_filename = FLAGS.predict_to_file
     else:
-      output_filename = '%s.result' % FLAGS.predict_from_file
+      output_filename = f'{FLAGS.predict_from_file}.result'
 
     tf.logging.info('Writing results into {0}'.format(output_filename))
-    with tf.gfile.Open(output_filename+'.perf', 'w') as f:
+    with tf.gfile.Open(f'{output_filename}.perf', 'w') as f:
       for res in predict_value_list:
         res = ' '.join(map(str, res))
         f.write('%s\n' % (res))
-    with tf.gfile.Open(output_filename+'.arch', 'w') as f:
+    with tf.gfile.Open(f'{output_filename}.arch', 'w') as f:
       for res in sample_id_list:
         res = ' '.join(map(str, res))
         f.write('%s\n' % (res))
-    with tf.gfile.Open(output_filename+'.new_arch', 'w') as f:
+    with tf.gfile.Open(f'{output_filename}.new_arch', 'w') as f:
       for res in new_sample_id_list:
         res = ' '.join(map(str, res))
         f.write('%s\n' % (res))
@@ -459,7 +453,7 @@ def get_params():
   if FLAGS.restore:
     with open(os.path.join(FLAGS.model_dir, 'hparams.json'), 'r') as f:
       old_params = json.load(f)
-    params.update(old_params)
+    params |= old_params
 
   return params 
 
@@ -475,7 +469,7 @@ def pairwise_accuracy(la, lb):
       if la[i] < la[j] and lb[i] < lb[j]:
         count += 1
       total += 1
-  tf.logging.info('N = {}, total = {}, count = {}'.format(N, total, count))
+  tf.logging.info(f'N = {N}, total = {total}, count = {count}')
   return float(count) / total
 
 def main(unparsed):
@@ -490,7 +484,9 @@ def main(unparsed):
     lines = f.read().splitlines()
     _NUM_SAMPLES['test'] = len(lines)
 
-  tf.logging.info('Found {} in training set, {} in test set'.format(_NUM_SAMPLES['train'], _NUM_SAMPLES['test']))
+  tf.logging.info(
+      f"Found {_NUM_SAMPLES['train']} in training set, {_NUM_SAMPLES['test']} in test set"
+  )
 
   if FLAGS.mode == 'train':
     params = get_params()
@@ -498,7 +494,7 @@ def main(unparsed):
     with open(os.path.join(params['model_dir'], 'hparams.json'), 'w') as f:
       json.dump(params, f)
     train(params)  
-      
+
   elif FLAGS.mode == 'test':
     if not os.path.exists(os.path.join(FLAGS.model_dir, 'hparams.json')):
       raise ValueError('No hparams.json found in {0}'.format(FLAGS.model_dir))

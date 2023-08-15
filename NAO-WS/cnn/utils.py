@@ -169,10 +169,8 @@ def count_model_params(tf_variables):
     tf_variables: list of all model variables
   """
 
-  num_vars = 0
-  for var in tf_variables:
-    num_vars += np.prod([dim.value for dim in var.get_shape()])
-  return num_vars
+  return sum(
+      np.prod([dim.value for dim in var.get_shape()]) for var in tf_variables)
 
 
 def generate_arch(n, num_nodes, num_ops=7):

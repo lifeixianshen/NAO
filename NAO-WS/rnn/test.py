@@ -109,8 +109,8 @@ def evaluate(data_source, batch_size=10):
 model = torch.load(os.path.join(args.save, 'model.pt'))
 
 total_params = sum(x.data.nelement() for x in model.parameters())
-logging('Args: {}'.format(args))
-logging('Model total parameters: {}'.format(total_params))
+logging(f'Args: {args}')
+logging(f'Model total parameters: {total_params}')
 parallel_model = model.cuda()
 
 # Run on test data.

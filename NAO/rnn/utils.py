@@ -33,7 +33,7 @@ def create_exp_dir(path, scripts_to_save=None):
     if not os.path.exists(path):
         os.mkdir(path)
 
-    print('Experiment dir : {}'.format(path))
+    print(f'Experiment dir : {path}')
     if scripts_to_save is not None:
         os.mkdir(os.path.join(path, 'scripts'))
         for script in scripts_to_save:
@@ -64,11 +64,15 @@ def embedded_dropout(embed, words, dropout=0.1, scale=None):
     padding_idx = embed.padding_idx
     if padding_idx is None:
         padding_idx = -1
-    X = embed._backend.Embedding.apply(words, masked_embed_weight,
-        padding_idx, embed.max_norm, embed.norm_type,
-        embed.scale_grad_by_freq, embed.sparse
+    return embed._backend.Embedding.apply(
+        words,
+        masked_embed_weight,
+        padding_idx,
+        embed.max_norm,
+        embed.norm_type,
+        embed.scale_grad_by_freq,
+        embed.sparse,
     )
-    return X
 
 
 class LockedDropout(nn.Module):
@@ -95,7 +99,7 @@ def parse_arch(arch):
     arch = list(map(int, arch.split()))
     lenth = len(arch) // 2
     recurrent = []
-    concat = [i for i in range(lenth+1)]
+    concat = list(range(lenth+1))
     ACT = {
         0: 'tanh',
         1: 'relu',

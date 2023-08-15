@@ -145,9 +145,7 @@ def input_fn(params, mode, data_dir, batch_size, num_epochs=1):
 
 def create_vocab_tables(vocab_file):
   """Creates vocab tables for src_vocab_file and tgt_vocab_file."""
-  vocab_table = lookup_ops.index_table_from_file(
-      vocab_file, default_value=0)
-  return vocab_table
+  return lookup_ops.index_table_from_file(vocab_file, default_value=0)
 
 def predict_from_file(estimator, batch_size, decode_from_file, decode_to_file=None):
   def infer_input_fn():
@@ -162,7 +160,7 @@ def predict_from_file(estimator, batch_size, decode_from_file, decode_to_file=No
     inputs, targets_inputs = iterator.get_next()
     assert inputs.shape.ndims == 2
     #assert targets_inputs.shape.ndims == 2
-    
+
     return {
       'encoder_input' : inputs,
       'decoder_input' : targets_inputs,
@@ -175,7 +173,7 @@ def predict_from_file(estimator, batch_size, decode_from_file, decode_to_file=No
   for result in result_iter:
     output = result['sample_id'].flatten()
     output = ' '.join(map(str, output))
-    tf.logging.info('Inference results OUTPUT: %s' % output)
+    tf.logging.info(f'Inference results OUTPUT: {output}')
     results.append(output)
     output = result['new_sample_id'].flatten()
     output = ' '.join(map(str, output))
@@ -187,16 +185,16 @@ def predict_from_file(estimator, batch_size, decode_from_file, decode_to_file=No
   if decode_to_file:
     output_filename = decode_to_file
   else:
-    output_filename = '%s.result' % decode_from_file
-    
+    output_filename = f'{decode_from_file}.result'
+
   tf.logging.info('Writing results into {0}'.format(output_filename))
-  with tf.gfile.Open(output_filename+'.arch', 'w') as f:
+  with tf.gfile.Open(f'{output_filename}.arch', 'w') as f:
     for res in results:
       f.write('%s\n' % (res))
-  with tf.gfile.Open(output_filename+'.new_arch', 'w') as f:
+  with tf.gfile.Open(f'{output_filename}.new_arch', 'w') as f:
     for res in new_ids:
       f.write('%s\n' % (res))
-  with tf.gfile.Open(output_filename+'.perf', 'w') as f:
+  with tf.gfile.Open(f'{output_filename}.perf', 'w') as f:
     for res in perfs:
       f.write('%s\n' % (res))
 
@@ -371,7 +369,7 @@ def get_params():
   if FLAGS.restore:
     with open(os.path.join(FLAGS.model_dir, 'hparams.json'), 'r') as f:
       old_params = json.load(f)
-    params.update(old_params)
+    params |= old_params
 
   return params 
 
@@ -443,16 +441,16 @@ def main(unparsed):
           input_fn=lambda: input_fn(
               params, 'train', params['data_dir'], params['batch_size'], params['eval_frequency']),
           hooks=[logging_hook])
-      
+
       # Evaluate the model and print results
-      
+
       eval_results = estimator.evaluate(
           input_fn=lambda: input_fn(params, 'test', params['data_dir'], _NUM_SAMPLES['test']))
       tf.logging.info('Evaluation on test data set')
-      print(eval_results) 
+      print(eval_results)
       result_iter = estimator.predict(lambda: input_fn(params, 'test', params['data_dir'], _NUM_SAMPLES['test']))
       predictions_list, targets_list = [], []
-      for i, result in enumerate(result_iter):
+      for result in result_iter:
         predict_value = result['predict_value'].flatten()#[0]
         targets = result['ground_truth_value'].flatten()#[0]
         predictions_list.extend(predict_value)
@@ -469,7 +467,7 @@ def main(unparsed):
       raise ValueError('No hparams.json found in {0}'.format(FLAGS.model_dir))
     with open(os.path.join(FLAGS.model_dir, 'hparams.json'), 'r') as f:
       params = json.load(f)
-  
+
     estimator = tf.estimator.Estimator(
       model_fn=model_fn, model_dir=FLAGS.model_dir, params=params)
     eval_results = estimator.evaluate(
@@ -478,7 +476,7 @@ def main(unparsed):
     print(eval_results)
     result_iter = estimator.predict(lambda: input_fn(params, 'test', params['data_dir'], _NUM_SAMPLES['test']))
     predictions_list, targets_list = [], []
-    for i, result in enumerate(result_iter):
+    for result in result_iter:
       predict_value = result['predict_value'].flatten()#[0]
       targets = result['ground_truth_value'].flatten()#[0]
       predictions_list.extend(predict_value)
@@ -501,7 +499,7 @@ def main(unparsed):
           params[k] = v
     estimator = tf.estimator.Estimator(
       model_fn=model_fn, model_dir=FLAGS.model_dir, params=params)
-    
+
     predict_from_file(estimator, FLAGS.batch_size, FLAGS.predict_from_file, FLAGS.predict_to_file)
 
 

@@ -301,7 +301,7 @@ def get_test_ops(x, y, params, reuse=False):
 
 def test(params):
   g = tf.Graph()
-  with g.as_default(), tf.device('/cpu:0'):
+  with (g.as_default(), tf.device('/cpu:0')):
     tf.set_random_seed(params['seed'])
     x_test, y_test = input_fn(False, 'test', params['data_dir'], params['dataset'], 100, None, None)
     _log_variable_sizes(tf.trainable_variables(), 'Trainable Variables')
@@ -309,7 +309,7 @@ def test(params):
     tf.logging.info('Starting Session')
     config = tf.ConfigProto(allow_soft_placement=True)
     with tf.train.SingularMonitoredSession(
-      config=config, checkpoint_dir=params['model_dir']) as sess:
+          config=config, checkpoint_dir=params['model_dir']) as sess:
       test_ops = [
         test_loss, test_accuracy
       ]
@@ -321,8 +321,8 @@ def test(params):
         test_loss_list.append(test_loss_v)
         test_accuracy_list.append(test_accuracy_v)
       test_time = time.time() - test_start_time
-      log_string =  "Evaluation on test data\n"
-      log_string += "loss={:<6f} ".format(np.mean(test_loss_list))
+      log_string = "Evaluation on test data\n" + "loss={:<6f} ".format(
+          np.mean(test_loss_list))
       log_string += "test_accuracy={:<8.6f} ".format(np.mean(test_accuracy_list))
       log_string += "secs={:<10.2f}".format((test_time))
       tf.logging.info(log_string)
@@ -356,11 +356,11 @@ def get_params():
   params['conv_dag'] = conv_dag
   params['reduc_dag'] = reduc_dag
   params['total_steps'] = total_steps
-  
+
   if FLAGS.hparams is not None:
     with open(os.path.join(FLAGS.hparams), 'r') as f:
       hparams = json.load(f)
-      params.update(hparams)
+      params |= hparams
 
   if params['conv_dag'] is None or params['reduc_dag'] is None:
     raise ValueError('You muse specify a registered model name or provide a model in the hparams.')

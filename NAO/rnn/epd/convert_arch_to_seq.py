@@ -13,14 +13,11 @@ with open(os.path.join(args.data_dir, 'valid_ppl'), 'r') as f:
 targets = list(map(float, targets))
 N=len(targets)
 for index in range(1,N+1):
-  with open(os.path.join(args.data_dir, '{}.arch'.format(index)), 'r') as f:
+  with open(os.path.join(args.data_dir, f'{index}.arch'), 'r') as f:
     line = f.readline()
   arch = list(map(int, line.strip().split()))
   for i, e in enumerate(arch):
-    if i % 2 == 0: #node index
-      arch[i] = arch[i] + 1
-    else: #activation function
-      arch[i] = arch[i] + 12
+    arch[i] = arch[i] + 1 if i % 2 == 0 else arch[i] + 12
   arch = ' '.join(list(map(str, arch)))
   inputs.append(arch)
 
@@ -42,12 +39,12 @@ decoder_test_target = open(os.path.join(args.data_dir, 'decoder.test.target'), '
 test_gt_target = open(os.path.join(args.data_dir, 'test.target.ground_truth'), 'w')
 
 for i in range(N):
-    if i < 50:
-      encoder_test_input.write('{}\n'.format(inputs[i]))
-      encoder_test_target.write('{}\n'.format(norm_targets[i]))
-      decoder_test_target.write('{}\n'.format(inputs[i]))
-      test_gt_target.write('{}\n'.format(targets[i]))
-    encoder_train_input.write('{}\n'.format(inputs[i]))
-    encoder_train_target.write('{}\n'.format(norm_targets[i]))
-    decoder_train_target.write('{}\n'.format(inputs[i]))
-    train_gt_target.write('{}\n'.format(targets[i]))
+  if i < 50:
+    encoder_test_input.write(f'{inputs[i]}\n')
+    encoder_test_target.write(f'{norm_targets[i]}\n')
+    decoder_test_target.write(f'{inputs[i]}\n')
+    test_gt_target.write(f'{targets[i]}\n')
+  encoder_train_input.write(f'{inputs[i]}\n')
+  encoder_train_target.write(f'{norm_targets[i]}\n')
+  decoder_train_target.write(f'{inputs[i]}\n')
+  train_gt_target.write(f'{targets[i]}\n')

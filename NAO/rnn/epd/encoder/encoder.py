@@ -36,7 +36,7 @@ class Encoder(object):
     if self.time_major:
       x = tf.transpose(x, [1,0,2])
     cell_list = []
-    for i in range(self.num_layers):
+    for _ in range(self.num_layers):
       lstm_cell = tf.nn.rnn_cell.LSTMCell(
         self.hidden_size)
       lstm_cell = tf.contrib.rnn.DropoutWrapper(
@@ -47,7 +47,7 @@ class Encoder(object):
       cell = cell_list[0]
     else:
       cell = tf.contrib.rnn.MultiRNNCell(cell_list)
-    
+
     initial_state = cell.zero_state(batch_size, dtype=tf.float32)
     x, state = tf.nn.dynamic_rnn(cell, 
       x, 
@@ -57,18 +57,14 @@ class Encoder(object):
     x = tf.nn.l2_normalize(x, dim=-1)
     self.encoder_outputs = x
     self.encoder_state = state
-    
-    if self.time_major:
-      x = tf.reduce_mean(x, axis=0)
-    else:
-      x = tf.reduce_mean(x, axis=1)
 
+    x = tf.reduce_mean(x, axis=0) if self.time_major else tf.reduce_mean(x, axis=1)
     x = tf.nn.l2_normalize(x, dim=-1)
 
     self.arch_emb = x
-    
+
     for i in range(self.mlp_num_layers):
-      name = 'mlp_{}'.format(i)
+      name = f'mlp_{i}'
       x = tf.layers.dense(x, self.mlp_hidden_size, activation=tf.nn.relu, name=name)
       """ 
       x = tf.layers.batch_normalization(
@@ -109,7 +105,7 @@ class Model(object):
     self.build_graph(scope, reuse)
 
   def build_graph(self, scope=None, reuse=False):
-    tf.logging.info("# creating %s graph ..." % self.mode)
+    tf.logging.info(f"# creating {self.mode} graph ...")
     # Encoder
     with tf.variable_scope(scope, reuse=reuse):
       initializer = tf.random_uniform_initializer(-0.1, 0.1)

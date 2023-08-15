@@ -188,52 +188,51 @@ def train():
       arch_pool = utils.generate_arch(controller_params['num_seed_arch'], child_params['num_cells'], 5) #[[[conv],[reduc]]]
       child_params['arch_pool'] = arch_pool
       child_params['arch_pool_prob'] = None
+    elif child_params['sample_policy'] == 'uniform':
+      child_params['arch_pool_prob'] = None
+    elif child_params['sample_policy'] == 'params':
+      child_params['arch_pool_prob'] = calculate_params(child_params['arch_pool'])
+    elif child_params['sample_policy'] == 'valid_performance':
+        child_params['arch_pool_prob'] = child_valid(child_params)
+    elif child_params['sample_policy'] == 'predicted_performance':
+      encoder_input = list(map(lambda x: utils.parse_arch_to_seq(x[0], branch_length) + \
+                                         utils.parse_arch_to_seq(x[1], branch_length), child_params['arch_pool']))
+      predicted_error_rate = controller.test(controller_params, encoder_input)
+      child_params['arch_pool_prob'] = [1-i[0] for i in predicted_error_rate]
     else:
-      if child_params['sample_policy'] == 'uniform':
-        child_params['arch_pool_prob'] = None
-      elif child_params['sample_policy'] == 'params':
-        child_params['arch_pool_prob'] = calculate_params(child_params['arch_pool'])
-      elif child_params['sample_policy'] == 'valid_performance':
-          child_params['arch_pool_prob'] = child_valid(child_params)
-      elif child_params['sample_policy'] == 'predicted_performance':
-        encoder_input = list(map(lambda x: utils.parse_arch_to_seq(x[0], branch_length) + \
-                                           utils.parse_arch_to_seq(x[1], branch_length), child_params['arch_pool']))
-        predicted_error_rate = controller.test(controller_params, encoder_input)
-        child_params['arch_pool_prob'] = [1-i[0] for i in predicted_error_rate]
-      else:
-        raise ValueError('Child model arch pool sample policy is not provided!')
-    
+      raise ValueError('Child model arch pool sample policy is not provided!')
+
     if isinstance(eval_every_epochs, int):
       child_params['eval_every_epochs'] = eval_every_epochs
     else:
-      for index, e in enumerate(eval_every_epochs):
+      for e in eval_every_epochs:
         if child_epoch < e:
           child_params['eval_every_epochs'] = e
           break
-          
+
     child_epoch = child_train(child_params)
-    
+
     # Evaluate seed archs
     valid_accuracy_list = child_valid(child_params)
 
     # Output archs and evaluated error rate
     old_archs = child_params['arch_pool']
     old_archs_perf = [1 - i for i in valid_accuracy_list]
-    
+
     old_archs_sorted_indices = np.argsort(old_archs_perf)
     old_archs = np.array(old_archs)[old_archs_sorted_indices].tolist()
     old_archs_perf = np.array(old_archs_perf)[old_archs_sorted_indices].tolist()
-    with open(os.path.join(child_params['model_dir'], 'arch_pool.{}'.format(child_epoch)), 'w') as fa:
-      with open(os.path.join(child_params['model_dir'], 'arch_pool.perf.{}'.format(child_epoch)), 'w') as fp:
+    with open(os.path.join(child_params['model_dir'], f'arch_pool.{child_epoch}'), 'w') as fa:
+      with open(os.path.join(child_params['model_dir'], f'arch_pool.perf.{child_epoch}'), 'w') as fp:
         with open(os.path.join(child_params['model_dir'], 'arch_pool'), 'w') as fa_latest:
           with open(os.path.join(child_params['model_dir'], 'arch_pool.perf'),'w') as fp_latest:
             for arch, perf in zip(old_archs, old_archs_perf):
               arch = ' '.join(map(str, arch[0] + arch[1]))
-              fa.write('{}\n'.format(arch))
-              fa_latest.write('{}\n'.format(arch))
-              fp.write('{}\n'.format(perf))
-              fp_latest.write('{}\n'.format(perf))
-      
+              fa.write(f'{arch}\n')
+              fa_latest.write(f'{arch}\n')
+              fp.write(f'{perf}\n')
+              fp_latest.write(f'{perf}\n')
+
     if child_epoch >= child_params['num_epochs']:
       break
 
@@ -248,7 +247,7 @@ def train():
     controller_params['batches_per_epoch'] = math.ceil(len(encoder_input) / controller_params['batch_size'])
     #if clean controller model
     controller.train(controller_params, encoder_input, encoder_target, decoder_target)
-    
+
     # Generate new archs
     #old_archs = old_archs[:450]
     new_archs = []
@@ -264,20 +263,20 @@ def train():
           new_archs.append(arch)
         if len(new_archs) >= 500:
           break
-      tf.logging.info('{} new archs generated now'.format(len(new_archs)))
+      tf.logging.info(f'{len(new_archs)} new archs generated now')
       if controller_params['predict_lambda'] > max_step_size:
         break
           #[[conv, reduc]]
     new_archs = list(map(lambda x: utils.parse_seq_to_arch(x, branch_length), new_archs)) #[[[conv],[reduc]]]
     num_new_archs = len(new_archs)
-    tf.logging.info("Generate {} new archs".format(num_new_archs))
+    tf.logging.info(f"Generate {num_new_archs} new archs")
     new_arch_pool = old_archs[:len(old_archs)-(num_new_archs+50)] + new_archs + utils.generate_arch(50, 5, 5)
-    tf.logging.info("Totally {} archs now to train".format(len(new_arch_pool)))
+    tf.logging.info(f"Totally {len(new_arch_pool)} archs now to train")
     child_params['arch_pool'] = new_arch_pool
     with open(os.path.join(child_params['model_dir'], 'arch_pool'), 'w') as f:
       for arch in new_arch_pool:
         arch = ' '.join(map(str, arch[0] + arch[1]))
-        f.write('{}\n'.format(arch))
+        f.write(f'{arch}\n')
   
   
 def get_child_model_params():
@@ -329,42 +328,41 @@ def get_child_model_params():
   return params
 
 def get_controller_params():
-  params = {
-    'model_dir': os.path.join(FLAGS.output_dir, 'controller'),
-    'num_seed_arch': FLAGS.controller_num_seed_arch,
-    'encoder_num_layers': FLAGS.controller_encoder_num_layers,
-    'encoder_hidden_size': FLAGS.controller_encoder_hidden_size,
-    'encoder_emb_size': FLAGS.controller_encoder_emb_size,
-    'mlp_num_layers': FLAGS.controller_mlp_num_layers,
-    'mlp_hidden_size': FLAGS.controller_mlp_hidden_size,
-    'decoder_num_layers': FLAGS.controller_decoder_num_layers,
-    'decoder_hidden_size': FLAGS.controller_decoder_hidden_size,
-    'source_length': FLAGS.controller_source_length,
-    'encoder_length': FLAGS.controller_encoder_length,
-    'decoder_length': FLAGS.controller_decoder_length,
-    'encoder_dropout': FLAGS.controller_encoder_dropout,
-    'mlp_dropout': FLAGS.controller_mlp_dropout,
-    'decoder_dropout': FLAGS.controller_decoder_dropout,
-    'weight_decay': FLAGS.controller_weight_decay,
-    'encoder_vocab_size': FLAGS.controller_encoder_vocab_size,
-    'decoder_vocab_size': FLAGS.controller_decoder_vocab_size,
-    'trade_off': FLAGS.controller_trade_off,
-    'train_epochs': FLAGS.controller_train_epochs,
-    'save_frequency': FLAGS.controller_save_frequency,
-    'batch_size': FLAGS.controller_batch_size,
-    'lr': FLAGS.controller_lr,
-    'optimizer': FLAGS.controller_optimizer,
-    'start_decay_step': FLAGS.controller_start_decay_step,
-    'decay_steps': FLAGS.controller_decay_steps,
-    'decay_factor': FLAGS.controller_decay_factor,
-    'attention': FLAGS.controller_attention,
-    'max_gradient_norm': FLAGS.controller_max_gradient_norm,
-    'time_major': FLAGS.controller_time_major,
-    'symmetry': FLAGS.controller_symmetry,
-    'predict_beam_width': FLAGS.controller_predict_beam_width,
-    'predict_lambda': FLAGS.controller_predict_lambda
+  return {
+      'model_dir': os.path.join(FLAGS.output_dir, 'controller'),
+      'num_seed_arch': FLAGS.controller_num_seed_arch,
+      'encoder_num_layers': FLAGS.controller_encoder_num_layers,
+      'encoder_hidden_size': FLAGS.controller_encoder_hidden_size,
+      'encoder_emb_size': FLAGS.controller_encoder_emb_size,
+      'mlp_num_layers': FLAGS.controller_mlp_num_layers,
+      'mlp_hidden_size': FLAGS.controller_mlp_hidden_size,
+      'decoder_num_layers': FLAGS.controller_decoder_num_layers,
+      'decoder_hidden_size': FLAGS.controller_decoder_hidden_size,
+      'source_length': FLAGS.controller_source_length,
+      'encoder_length': FLAGS.controller_encoder_length,
+      'decoder_length': FLAGS.controller_decoder_length,
+      'encoder_dropout': FLAGS.controller_encoder_dropout,
+      'mlp_dropout': FLAGS.controller_mlp_dropout,
+      'decoder_dropout': FLAGS.controller_decoder_dropout,
+      'weight_decay': FLAGS.controller_weight_decay,
+      'encoder_vocab_size': FLAGS.controller_encoder_vocab_size,
+      'decoder_vocab_size': FLAGS.controller_decoder_vocab_size,
+      'trade_off': FLAGS.controller_trade_off,
+      'train_epochs': FLAGS.controller_train_epochs,
+      'save_frequency': FLAGS.controller_save_frequency,
+      'batch_size': FLAGS.controller_batch_size,
+      'lr': FLAGS.controller_lr,
+      'optimizer': FLAGS.controller_optimizer,
+      'start_decay_step': FLAGS.controller_start_decay_step,
+      'decay_steps': FLAGS.controller_decay_steps,
+      'decay_factor': FLAGS.controller_decay_factor,
+      'attention': FLAGS.controller_attention,
+      'max_gradient_norm': FLAGS.controller_max_gradient_norm,
+      'time_major': FLAGS.controller_time_major,
+      'symmetry': FLAGS.controller_symmetry,
+      'predict_beam_width': FLAGS.controller_predict_beam_width,
+      'predict_lambda': FLAGS.controller_predict_lambda,
   }
-  return params
 
 def main(unused_argv):
   # Using the Winograd non-fused algorithms provides a small performance boost.

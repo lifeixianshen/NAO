@@ -58,41 +58,41 @@ class NASCell(object):
 
 
   def _nas_conv(self, x, curr_cell, prev_cell, filter_size, out_filters, stack_conv=1):
-    params = 0
-    if isinstance(filter_size, (tuple, list)):
-      # create params and pick the correct path
-      inp_c = get_channel_dim(x)
-      params += filter_size[0]*filter_size[1]*inp_c*out_filters
-      params += out_filters * 4
-        
-      params += filter_size[1] * filter_size[0] * inp_c * out_filters
-      params += out_filters * 4
-      
-    else:
-      for conv_id in range(stack_conv):
-        inp_c = get_channel_dim(x)
-        params += filter_size * filter_size * inp_c * out_filters
-        params += out_filters * 4
-    return x, params
+      params = 0
+      if isinstance(filter_size, (tuple, list)):
+          # create params and pick the correct path
+          inp_c = get_channel_dim(x)
+          params += filter_size[0]*filter_size[1]*inp_c*out_filters
+          params += out_filters * 4
+
+          params += filter_size[1] * filter_size[0] * inp_c * out_filters
+          params += out_filters * 4
+
+      else:
+          for _ in range(stack_conv):
+              inp_c = get_channel_dim(x)
+              params += filter_size * filter_size * inp_c * out_filters
+              params += out_filters * 4
+      return x, params
 
 
   def _nas_sep_conv(self, x, curr_cell, prev_cell, filter_size, out_filters, stack_conv=2):
-    params = 0
-    for conv_id in range(stack_conv):
-      inp_c = get_channel_dim(x)
-      params += filter_size * filter_size * inp_c * 1
-      params += inp_c * out_filters
-      params += out_filters * 4
-    return x, params
+      params = 0
+      for _ in range(stack_conv):
+          inp_c = get_channel_dim(x)
+          params += filter_size * filter_size * inp_c * 1
+          params += inp_c * out_filters
+          params += out_filters * 4
+      return x, params
   
   def _nas_dil_sep_conv(self, x, curr_cell, prev_cell, filter_size, out_filters, dilation_rate=2, stack_conv=2):
-    params = 0
-    for conv_id in range(stack_conv):
-      inp_c = get_channel_dim(x)
-      params += filter_size * filter_size * inp_c * 1
-      params += inp_c * out_filters
-      params += out_filters * 4
-    return x, params
+      params = 0
+      for _ in range(stack_conv):
+          inp_c = get_channel_dim(x)
+          params += filter_size * filter_size * inp_c * 1
+          params += inp_c * out_filters
+          params += out_filters * 4
+      return x, params
 
   def _nas_cell(self, x, curr_cell, prev_cell, op_id, out_filters, params):
     max_pool_c = get_channel_dim(x)
@@ -183,19 +183,18 @@ class NASCell(object):
 
 
 def _build_aux_head(aux_net, params):
-  aux_net = aux_net[0] // 3, aux_net[1] // 3, aux_net[2]
-  params.append(1*1*aux_net[-1]*128)
-  aux_net = aux_net[0], aux_net[1], 128
-  params.append(128)
-      
-  params.append(1*1*aux_net[-1]*768)
-  aux_net = aux_net[0], aux_net[1], 768
-  params.append(768)
+    aux_net = aux_net[0] // 3, aux_net[1] // 3, aux_net[2]
+    params.append(1*1*aux_net[-1]*128)
+    aux_net = aux_net[0], aux_net[1], 128
+    params.append(128)
 
-  aux_net = 1, 1, 768
-  params.append(aux_net[0]*aux_net[1]*10)
-  aux_net = (1,1,10)
-  return aux_net
+    params.append(1*1*aux_net[-1]*768)
+    aux_net = aux_net[0], aux_net[1], 768
+    params.append(768)
+
+    aux_net = 1, 1, 768
+    params.append(aux_net[0]*aux_net[1]*10)
+    return 1, 1, 10
 
 def calculate_model_params(
   inputs,
@@ -207,45 +206,41 @@ def calculate_model_params(
   stem_multiplier=3,
   ):
   
-  params = []
- 
-  num_cells = N * 3
-  total_num_cells = num_cells + 2
+    num_cells = N * 3
+    total_num_cells = num_cells + 2
 
-  convolution_cell = NASCell(filters, conv_dag, num_nodes, total_num_cells)
-  reduction_cell = NASCell(filters, reduc_dag, num_nodes, total_num_cells)
+    convolution_cell = NASCell(filters, conv_dag, num_nodes, total_num_cells)
+    reduction_cell = NASCell(filters, reduc_dag, num_nodes, total_num_cells)
 
-  reduction_layers = []
-  for pool_num in range(1, 3):
-    layer_num = (float(pool_num) / (2 + 1)) * num_cells
-    layer_num = int(layer_num)
-    reduction_layers.append(layer_num)
+    reduction_layers = []
+    for pool_num in range(1, 3):
+      layer_num = (float(pool_num) / (2 + 1)) * num_cells
+      layer_num = int(layer_num)
+      reduction_layers.append(layer_num)
 
-  if len(reduction_layers) >= 2:
-    aux_head_ceill_index = reduction_layers[1]  #- 1
-    
-  params.append(3*3*inputs[-1]*filters*stem_multiplier)
-  params.append(filters*stem_multiplier)
+    if len(reduction_layers) >= 2:
+      aux_head_ceill_index = reduction_layers[1]  #- 1
 
-  inputs = (inputs[0], inputs[1], filters*stem_multiplier)
-  layers = [inputs,inputs]
+    params = [3*3*inputs[-1]*filters*stem_multiplier, filters*stem_multiplier]
+    inputs = (inputs[0], inputs[1], filters*stem_multiplier)
+    layers = [inputs,inputs]
 
-  true_cell_num, filter_scaling = 0, 1
+    true_cell_num, filter_scaling = 0, 1
 
-  for cell_num in range(num_cells):
-    if cell_num in reduction_layers:
-      filter_scaling *= 2
-      inputs = factorized_reduction(inputs, filters * filter_scaling, 2, params)
+    for cell_num in range(num_cells):
+      if cell_num in reduction_layers:
+        filter_scaling *= 2
+        inputs = factorized_reduction(inputs, filters * filter_scaling, 2, params)
+        layers = [layers[-1], inputs]
+        inputs = reduction_cell(layers[-1], filter_scaling, layers[-2], params)
+        layers = [layers[-1], inputs]
+      inputs = convolution_cell(layers[-1], filter_scaling, layers[-2], params)
       layers = [layers[-1], inputs]
-      inputs = reduction_cell(layers[-1], filter_scaling, layers[-2], params)
-      layers = [layers[-1], inputs]
-    inputs = convolution_cell(layers[-1], filter_scaling, layers[-2], params)
-    layers = [layers[-1], inputs]
-    if aux_head_ceill_index == cell_num:
-      aux_logits = _build_aux_head(inputs, params)
+      if aux_head_ceill_index == cell_num:
+        aux_logits = _build_aux_head(inputs, params)
 
-  params.append(inputs[-1]*10)
-  return sum(params)
+    params.append(inputs[-1]*10)
+    return sum(params)
 
 def calculate_params(
   arch_pool, 

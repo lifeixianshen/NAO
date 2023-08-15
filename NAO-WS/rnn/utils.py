@@ -67,8 +67,8 @@ def get_batch(source, i, bptt, seq_len=None, evaluation=False):
 def create_exp_dir(path, scripts_to_save=None):
   if not os.path.exists(path):
     os.mkdir(path)
-  
-  print('Experiment dir : {}'.format(path))
+
+  print(f'Experiment dir : {path}')
   if scripts_to_save is not None:
     os.mkdir(os.path.join(path, 'scripts'))
     for script in scripts_to_save:
@@ -96,15 +96,19 @@ def embedded_dropout(embed, words, dropout=0.1, scale=None):
     masked_embed_weight = embed.weight
   if scale:
     masked_embed_weight = scale.expand_as(masked_embed_weight) * masked_embed_weight
-  
+
   padding_idx = embed.padding_idx
   if padding_idx is None:
     padding_idx = -1
-  X = embed._backend.Embedding.apply(words, masked_embed_weight,
-                                     padding_idx, embed.max_norm, embed.norm_type,
-                                     embed.scale_grad_by_freq, embed.sparse
-                                     )
-  return X
+  return embed._backend.Embedding.apply(
+      words,
+      masked_embed_weight,
+      padding_idx,
+      embed.max_norm,
+      embed.norm_type,
+      embed.scale_grad_by_freq,
+      embed.sparse,
+  )
 
 
 class LockedDropout(nn.Module):
@@ -204,8 +208,7 @@ def hamming_distance(la, lb):
 def normalize_target(target_list):
   min_val = min(target_list)
   max_val = max(target_list)
-  res = [(i - min_val) / (max_val - min_val) for i in target_list]
-  return res
+  return [(i - min_val) / (max_val - min_val) for i in target_list]
 
 def parse_arch(arch):
   return list(map(int, arch.strip().split()))

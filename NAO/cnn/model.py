@@ -22,8 +22,7 @@ def get_channel_dim(x, data_format='INVALID'):
 
 def get_channel_index(data_format='INVALID'):
   assert data_format != 'INVALID'
-  axis = 1 if data_format == 'channels_first' else 3
-  return axis
+  return 1 if data_format == 'channels_first' else 3
 
 
 def batch_normalization(inputs, data_format, is_training):
@@ -132,7 +131,6 @@ def _conv2d(operation, inputs, filters, strides, data_format, is_training):
         data_format=data_format)
     with tf.variable_scope('bn_conv_{0}x{0}_{1}'.format(kernel_size, 1)):
       inputs = batch_normalization(inputs, data_format, is_training)
-    return inputs
   else:
     kernel_size1 = kernel_size[0]
     inputs = relu(inputs)
@@ -156,7 +154,8 @@ def _conv2d(operation, inputs, filters, strides, data_format, is_training):
         data_format=data_format)
     with tf.variable_scope('bn_conv_{0}x{1}_{2}'.format(kernel_size2[0], kernel_size2[1], 2)):
       inputs = batch_normalization(inputs, data_format, is_training)
-    return inputs
+
+  return inputs
 
 
 def _dil_conv2d(operation, inputs, filters, strides, data_format, is_training):
@@ -184,20 +183,18 @@ def _operation_to_filter_shape(operation):
       filter_height = int(filter_height_width[0])
       filter_width = int(filter_height_width[1])
       filter_shape.append((filter_height, filter_width))
-    return filter_shape
   else:
     filter_height_width = operation.split('x')
     filter_shape = int(filter_height_width[0])
     assert filter_shape == int(
         filter_height_width[1]), 'Rectangular filters not supported.'
-    return filter_shape
+
+  return filter_shape
 
 
 def _operation_to_num_layers(operation):
   splitted_operation = operation.split(' ')
-  if 'x' in splitted_operation[-1]:
-    return 1
-  return int(splitted_operation[-1])
+  return 1 if 'x' in splitted_operation[-1] else int(splitted_operation[-1])
 
 
 def _operation_to_dilation_rate(operation):
@@ -465,7 +462,7 @@ class NASCell(object):
     is_training = self._is_training
     filters = self._filter_size
 
-    out_height = min([int(h[name].shape[2]) for name in loose_nodes])
+    out_height = min(int(h[name].shape[2]) for name in loose_nodes)
 
     for i in range(1, self._num_nodes+1):
       node_name = 'node_%d'%i
@@ -478,11 +475,11 @@ class NASCell(object):
       should_reduce = should_reduce and (node_name in loose_nodes)
       if should_reduce:
         strides = 2 if out_height != curr_height else 1
-        with tf.variable_scope('reduction_{}'.format(i)):
+        with tf.variable_scope(f'reduction_{i}'):
           h[node_name] = factorized_reduction(h[node_name], filters, strides, data_format, is_training)
 
-    output = tf.concat([h[name] for name in loose_nodes], axis=get_channel_index(data_format))
-    return output
+    return tf.concat([h[name] for name in loose_nodes],
+                     axis=get_channel_index(data_format))
 
   def _apply_drop_path(self, inputs, is_training, current_step=None, use_summaries=False, drop_connect_version='v3'):
     drop_path_keep_prob = self._drop_path_keep_prob
@@ -530,13 +527,10 @@ def _build_aux_head(aux_net, num_classes, params, data_format, is_training):
         data_format=data_format)
       aux_logits = batch_normalization(aux_logits, data_format, is_training)
       aux_logits = relu(aux_logits)
-      
+
     with tf.variable_scope('avg_pool'):
       shape = aux_logits.shape
-      if data_format == 'channels_first':
-        shape = shape[2:4]
-      else:
-        shape = shape[1:3]
+      shape = shape[2:4] if data_format == 'channels_first' else shape[1:3]
       aux_logits = tf.layers.conv2d(
         inputs=aux_logits, filters=768, kernel_size=shape, 
         strides=1, padding='VALID', use_bias=_USE_BIAS, 
@@ -616,10 +610,7 @@ def build_model(inputs, params, is_training, reuse=False):
   reduc_dag = params['reduc_dag']
   N = params['N']
   num_nodes = params['num_nodes'] + 2
-  if is_training:
-    drop_path_keep_prob = params['drop_path_keep_prob']
-  else:
-    drop_path_keep_prob = 1.0
+  drop_path_keep_prob = params['drop_path_keep_prob'] if is_training else 1.0
   dense_dropout_keep_prob = params['dense_dropout_keep_prob']
   total_steps = params['total_steps']
   if params['data_format'] is None:
@@ -630,13 +621,13 @@ def build_model(inputs, params, is_training, reuse=False):
   stem_multiplier = params['stem_multiplier']
   use_aux_head = params['use_aux_head']
 
-  
+
   if data_format == 'channels_first':
     # Convert the inputs from channels_last (NHWC) to channels_first (NCHW).
     # This provides a large performance boost on GPU. See
     # https://www.tensorflow.org/performance/performance_guide#data_formats
     inputs = tf.transpose(inputs, [0, 3, 1, 2])
- 
+
   num_cells = N * 3
   total_num_cells = num_cells + 2
   if params['dataset'] == 'imagenet':
@@ -664,8 +655,8 @@ def build_model(inputs, params, is_training, reuse=False):
       inputs, layers = _imagenet_stem(inputs, reduction_cell, filters, 2, stem_multiplier, data_format, is_training)
       true_cell_num, filter_scaling = 2, 1
 
+    strides = 1
     for cell_num in range(num_cells):
-      strides = 1
       if cell_num in reduction_layers:
         filter_scaling *= 2
         with tf.variable_scope('reduction_cell_%d' % (reduction_layers.index(cell_num)+1)):
@@ -682,12 +673,12 @@ def build_model(inputs, params, is_training, reuse=False):
     inputs = relu(inputs)
 
     assert inputs.shape.ndims == 4
-        
+
     if data_format == 'channels_first':
       inputs = tf.reduce_mean(inputs, axis=[2,3])
     else:
       inputs = tf.reduce_mean(inputs, axis=[1,2])
-      
+
     # tf.layers.dropout(inputs, rate) where rate is the drop rate
     # tf.nn.dropout(inputs, rate) where rate is the keep prob
     inputs = tf.layers.dropout(inputs, 1 - dense_dropout_keep_prob, training=is_training)

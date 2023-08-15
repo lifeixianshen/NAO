@@ -186,10 +186,10 @@ def train(params, encoder_input, encoder_target, decoder_target):
     tf.logging.info('Starting Session')
     config = tf.ConfigProto(allow_soft_placement=True)
     with tf.train.SingularMonitoredSession(
-      config=config, hooks=hooks, checkpoint_dir=params['model_dir']) as sess:
+          config=config, hooks=hooks, checkpoint_dir=params['model_dir']) as sess:
       writer = tf.summary.FileWriter(params['model_dir'], sess.graph)
       start_time = time.time()
-      for step in range(params['train_epochs'] * params['batches_per_epoch']):
+      for _ in range(params['train_epochs'] * params['batches_per_epoch']):
         run_ops = [
           train_mse,
           train_cross_entropy,
@@ -206,11 +206,11 @@ def train(params, encoder_input, encoder_target, decoder_target):
         writer.add_summary(summary, global_step_v)
 
         epoch = (global_step_v+1) // params['batches_per_epoch']
-        
+
         curr_time = time.time()
         if (global_step_v+1) % 100 == 0:
-          log_string = "epoch={:<6d} ".format(epoch)
-          log_string += "step={:<6d} ".format(global_step_v+1)
+          log_string = "epoch={:<6d} ".format(epoch) + "step={:<6d} ".format(
+              global_step_v + 1)
           log_string += "se={:<6f} ".format(train_mse_v)
           log_string += "cross_entropy={:<6f} ".format(train_cross_entropy_v)
           log_string += "loss={:<6f} ".format(train_loss_v)
@@ -221,7 +221,9 @@ def train(params, encoder_input, encoder_target, decoder_target):
           
 def predict(params, encoder_input):
   with tf.Graph().as_default():
-    tf.logging.info('Generating new architectures using gradient descent with step size {}'.format(params['predict_lambda']))
+    tf.logging.info(
+        f"Generating new architectures using gradient descent with step size {params['predict_lambda']}"
+    )
     tf.logging.info('Preparing data')
     N = len(encoder_input)
     encoder_input, decoder_input = input_fn(

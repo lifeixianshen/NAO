@@ -36,7 +36,7 @@ class Encoder(object):
     if self.time_major:
       x = tf.transpose(x, [1,0,2])
     cell_list = []
-    for i in range(self.num_layers):
+    for _ in range(self.num_layers):
       lstm_cell = tf.contrib.rnn.LSTMCell(
         self.hidden_size)
       lstm_cell = tf.contrib.rnn.DropoutWrapper(
@@ -56,17 +56,14 @@ class Encoder(object):
     x = tf.nn.l2_normalize(x,dim=-1)
     self.encoder_outputs = x
     self.encoder_state = state
-    
-    if self.time_major:
-      x = tf.reduce_mean(x, axis=0)
-    else:
-      x = tf.reduce_mean(x, axis=1)
+
+    x = tf.reduce_mean(x, axis=0) if self.time_major else tf.reduce_mean(x, axis=1)
     x = tf.nn.l2_normalize(x, dim=-1)
 
     self.arch_emb = x
-    
+
     for i in range(self.mlp_num_layers):
-      name = 'mlp_{}'.format(i)
+      name = f'mlp_{i}'
       x = tf.layers.dropout(x, self.mlp_dropout)
       x = tf.layers.dense(x, self.mlp_hidden_size, activation=tf.nn.relu, name=name)
     self.predict_value = tf.layers.dense(x, 1, activation=tf.sigmoid, name='regression')
@@ -103,7 +100,7 @@ class Model(object):
 
   
   def build_graph(self, scope=None, reuse=False):
-    tf.logging.info("# creating %s graph ..." % self.mode)
+    tf.logging.info(f"# creating {self.mode} graph ...")
     # Encoder
     with tf.variable_scope(scope, reuse=reuse):
       self.W_emb = tf.get_variable('W_emb', [self.vocab_size, self.emb_size])

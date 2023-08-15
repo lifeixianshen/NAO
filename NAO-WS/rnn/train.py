@@ -125,7 +125,7 @@ assert args.arch
 args.arch = parse_arch(args.arch)
 
 if os.path.exists(os.path.join(args.save, 'model.pt')):
-    print("Found model.pt in {}, automatically continue training.".format(args.save))
+    print(f"Found model.pt in {args.save}, automatically continue training.")
     args.continue_train = True
 
 if args.continue_train:
@@ -144,9 +144,9 @@ else:
     parallel_model = model
 
 total_params = sum(x.data.nelement() for x in model.parameters())
-logging.info('Args: {}'.format(args))
-logging.info('Model total parameters: {}'.format(total_params))
-logging.info('Arch: {}'.format(args.arch))
+logging.info(f'Args: {args}')
+logging.info(f'Model total parameters: {total_params}')
+logging.info(f'Arch: {args.arch}')
 
 
 def evaluate(data_source, batch_size=10):

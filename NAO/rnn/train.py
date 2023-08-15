@@ -118,12 +118,12 @@ test_data = batchify(corpus.test, test_batch_size, args)
 
 ntokens = len(corpus.dictionary)
 try:
-    genotype = eval("genotypes.%s" % args.arch)
+    genotype = eval(f"genotypes.{args.arch}")
 except:
     genotype = parse_arch(args.arch)
 
 if os.path.exists(os.path.join(args.save, 'model.pt')):
-    print("Found model.pt in {}, automatically continue training.".format(args.save))
+    print(f"Found model.pt in {args.save}, automatically continue training.")
     args.continue_train = True
 
 if args.continue_train:
@@ -142,9 +142,9 @@ else:
     parallel_model = model
 
 total_params = sum(x.data.nelement() for x in model.parameters())
-logging.info('Args: {}'.format(args))
-logging.info('Model total parameters: {}'.format(total_params))
-logging.info('Genotype: {}'.format(genotype))
+logging.info(f'Args: {args}')
+logging.info(f'Model total parameters: {total_params}')
+logging.info(f'Genotype: {genotype}')
 
 
 def evaluate(data_source, batch_size=10):

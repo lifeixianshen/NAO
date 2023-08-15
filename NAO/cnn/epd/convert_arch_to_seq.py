@@ -19,7 +19,7 @@ B=5
 def parse_dag(cell):
   dag = []
   for i in range(3, B+2+1):
-    name = 'node_{}'.format(i)
+    name = f'node_{i}'
     node = cell[name]
     prev_node1 = vocab.VOCAB1.index(node[1])
     prev_node2 = vocab.VOCAB1.index(node[2])
@@ -46,7 +46,7 @@ with open(os.path.join(args.data_dir, 'valid_error_rate'), 'r') as f:
 targets = list(map(float, targets))
 N=len(targets)
 for index in range(1,N+1):
-  with open(os.path.join(args.data_dir, 'dag.{}.json'.format(index)), 'r') as f:
+  with open(os.path.join(args.data_dir, f'dag.{index}.json'), 'r') as f:
     content = json.load(f)
     conv_dag = content['conv_dag']
     reduc_dag = content['reduc_dag']
@@ -78,11 +78,11 @@ test_gt_target = open(os.path.join(args.data_dir, 'test.target.ground_truth'), '
 
 for i in range(N):
   if i < 50:
-    encoder_test_input.write('{}\n'.format(inputs[i]))
-    encoder_test_target.write('{}\n'.format(norm_targets[i]))
-    decoder_test_target.write('{}\n'.format(inputs[i]))
-    test_gt_target.write('{}\n'.format(targets[i]))
-  encoder_train_input.write('{}\n'.format(inputs[i]))
-  encoder_train_target.write('{}\n'.format(norm_targets[i]))
-  decoder_train_target.write('{}\n'.format(inputs[i]))
-  train_gt_target.write('{}\n'.format(targets[i]))
+    encoder_test_input.write(f'{inputs[i]}\n')
+    encoder_test_target.write(f'{norm_targets[i]}\n')
+    decoder_test_target.write(f'{inputs[i]}\n')
+    test_gt_target.write(f'{targets[i]}\n')
+  encoder_train_input.write(f'{inputs[i]}\n')
+  encoder_train_target.write(f'{norm_targets[i]}\n')
+  decoder_train_target.write(f'{inputs[i]}\n')
+  train_gt_target.write(f'{targets[i]}\n')

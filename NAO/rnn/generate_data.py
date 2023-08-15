@@ -10,17 +10,14 @@ targets = []
 
 all_data = range(1,1509)
 for index in all_data:
-  with open(os.path.join(dag_folder, '{}.arch'.format(index)), 'r') as f:
+  with open(os.path.join(dag_folder, f'{index}.arch'), 'r') as f:
     arch = f.readline().split()
     arch = list(map(int, arch))
     for i, e in enumerate(arch):
-      if i % 2 == 0: #node index
-        arch[i] = arch[i] + 1
-      else: #activation function
-        arch[i] = arch[i] + 12
+      arch[i] = arch[i] + 1 if i % 2 == 0 else arch[i] + 12
     arch = ' '.join(list(map(str, arch)))
 
-  with open(os.path.join(score_folder, '{}.score'.format(index)), 'r') as f:
+  with open(os.path.join(score_folder, f'{index}.score'), 'r') as f:
     all_ppl = f.read().splitlines()
     all_ppl = list(map(float, all_ppl))
     try:
@@ -28,9 +25,9 @@ for index in all_data:
       inputs.append(arch)
       targets.append(min_all_ppl)
     except:
-      print('{}.score failed'.format(index))
+      print(f'{index}.score failed')
 
-print('{} valid data in total'.format(len(inputs)))
+print(f'{len(inputs)} valid data in total')
 
 min_val = min(targets)
 max_val = max(targets)
@@ -52,10 +49,10 @@ test_gt_target = open('test.target.ground_truth', 'w')
 
 for i in range(N):
   if i < 50:
-    test_input.write('{}\n'.format(inputs[i]))
-    test_target.write('{}\n'.format(norm_targets[i]))
-    test_gt_target.write('{}\n'.format(targets[i]))
+    test_input.write(f'{inputs[i]}\n')
+    test_target.write(f'{norm_targets[i]}\n')
+    test_gt_target.write(f'{targets[i]}\n')
   else:
-    train_input.write('{}\n'.format(inputs[i]))
-    train_target.write('{}\n'.format(norm_targets[i]))
-    train_gt_target.write('{}\n'.format(targets[i]))
+    train_input.write(f'{inputs[i]}\n')
+    train_target.write(f'{norm_targets[i]}\n')
+    train_gt_target.write(f'{targets[i]}\n')

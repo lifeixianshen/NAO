@@ -18,12 +18,9 @@ with open(args.arch_file, 'r') as fin:
 lines = [list(map(int, line.split())) for line in lines]
 N = len(lines)
 for index in range(N):
-  with open(os.path.join(args.output_dir,'{}.arch'.format(index+1)), 'w') as fout:
+  with open(os.path.join(args.output_dir, f'{index + 1}.arch'), 'w') as fout:
     arch = lines[index]
     for i, e in enumerate(arch):
-      if i % 2 == 0: #node index
-        arch[i] = arch[i] - 1
-      else: #activation function
-        arch[i] = arch[i] - 12
+      arch[i] = arch[i] - 1 if i % 2 == 0 else arch[i] - 12
     arch = ' '.join(list(map(str, arch)))
-    fout.write('{}\n'.format(arch))
+    fout.write(f'{arch}\n')

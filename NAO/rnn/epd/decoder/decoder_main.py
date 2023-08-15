@@ -121,9 +121,7 @@ def input_fn(params, mode, data_dir, batch_size, num_epochs=1):
 
 def create_vocab_tables(vocab_file):
   """Creates vocab tables for src_vocab_file and tgt_vocab_file."""
-  vocab_table = lookup_ops.index_table_from_file(
-      vocab_file, default_value=0)
-  return vocab_table
+  return lookup_ops.index_table_from_file(vocab_file, default_value=0)
 
 def predict_from_file(estimator, batch_size, decode_from_file, decode_to_file=None):
   def infer_input_fn():
@@ -139,7 +137,7 @@ def predict_from_file(estimator, batch_size, decode_from_file, decode_to_file=No
     inputs, targets_inputs = iterator.get_next()
     assert inputs.shape.ndims == 2
     #assert targets_inputs.shape.ndims == 2
-    
+
     return {
       'inputs' : inputs, 
       'targets_inputs' : targets_inputs,
@@ -151,14 +149,14 @@ def predict_from_file(estimator, batch_size, decode_from_file, decode_to_file=No
   for result in result_iter:
     output = result['output'].flatten()
     output = ' '.join(map(str, output))
-    tf.logging.info('Inference results OUTPUT: %s' % output)
+    tf.logging.info(f'Inference results OUTPUT: {output}')
     results.append(output)
 
   if decode_to_file:
     output_filename = decode_to_file
   else:
-    output_filename = '%s.result' % decode_from_file
-    
+    output_filename = f'{decode_from_file}.result'
+
   tf.logging.info('Writing results into {0}'.format(output_filename))
   with tf.gfile.Open(output_filename, 'w') as f:
     for res in results:
@@ -279,7 +277,7 @@ def get_params():
   if FLAGS.restore:
     with open(os.path.join(FLAGS.model_dir, 'hparams.json'), 'r') as f:
       old_params = json.load(f)
-    params.update(old_params)
+    params |= old_params
 
   return params 
 

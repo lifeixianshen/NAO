@@ -18,4 +18,4 @@ inputs, targets = zip(*data)
 
 with open(os.path.join(args.dir,'top100'), 'w') as fout:
   for line in inputs:
-    fout.write('{}\n'.format(line))
+    fout.write(f'{line}\n')

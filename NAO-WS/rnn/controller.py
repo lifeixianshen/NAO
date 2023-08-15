@@ -41,14 +41,14 @@ class Controller(nn.Module):
     encoder_outputs, encoder_hidden, arch_emb, predict_value, new_encoder_outputs, new_arch_emb = self.encoder.infer(input_variable, predict_lambda)
     new_encoder_hidden = (new_arch_emb.unsqueeze(0), new_arch_emb.unsqueeze(0))
     decoder_outputs, decoder_hidden, ret = self.decoder(None, new_encoder_hidden, new_encoder_outputs, self.decode_function)
-    new_arch = torch.stack(ret['sequence'], 0).permute(1, 0, 2)
-    return new_arch
+    return torch.stack(ret['sequence'], 0).permute(1, 0, 2)
 
 def train(encoder_input, encoder_target, decoder_target, model, parallel_model, optimizer, params, epoch):
   logging.info('Training Encoder-Predictor-Decoder')
   step = 0
   start_time = time.time()
   train_epochs = params['train_epochs']
+  LOG = 100
   for e in range(1, train_epochs+1):
     #prepare data
     N = len(encoder_input)
@@ -62,7 +62,7 @@ def train(encoder_input, encoder_target, decoder_target, model, parallel_model, 
     encoder_train_target = controller_batchify(torch.Tensor(encoder_target), params['batch_size'], cuda=True)
     decoder_train_input = controller_batchify(torch.LongTensor(decoder_input), params['batch_size'], cuda=True)
     decoder_train_target = controller_batchify(torch.LongTensor(decoder_target), params['batch_size'], cuda=True)
-    
+
     epoch += 1
     total_loss = 0
     mse = 0
@@ -85,9 +85,8 @@ def train(encoder_input, encoder_target, decoder_target, model, parallel_model, 
       loss.backward()
       torch.nn.utils.clip_grad_norm(model.parameters(), params['max_gradient_norm'])
       optimizer.step()
-  
+
       step += 1
-      LOG = 100
       if step % LOG == 0:
         elapsed = time.time() - start_time
         cur_loss = total_loss[0] / LOG
@@ -108,10 +107,12 @@ def train(encoder_input, encoder_target, decoder_target, model, parallel_model, 
   return epoch
   
 def infer(encoder_input, model, parallel_model, params):
-  logging.info('Generating new architectures using gradient descent with step size {}'.format(params['predict_lambda']))
+  logging.info(
+      f"Generating new architectures using gradient descent with step size {params['predict_lambda']}"
+  )
   logging.info('Preparing data')
   encoder_infer_input = controller_batchify(torch.LongTensor(encoder_input), params['batch_size'], cuda=True)
-  
+
   new_arch_list = []
   for i in range(encoder_infer_input.size(0)):
     model.eval()

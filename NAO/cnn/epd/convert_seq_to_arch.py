@@ -20,24 +20,18 @@ def get_dag(arch):
   dag = OrderedDict()
   for i in range(1, 7+1):
     name = 'node_%d' % i
-    if i==1 or i==2:
+    if i in [1, 2]:
       node = [name, None, None, None, None]
     else:
       index = i-3
       p1 = vocab.VOCAB2[arch[index*6+0]]
       op11 = vocab.VOCAB2[arch[index*6+1]]
       op12 = vocab.VOCAB2[arch[index*6+2]]
-      if op11 == 'identity':
-        op1 = op11
-      else:
-        op1 = '{} {}'.format(op11, op12)
+      op1 = op11 if op11 == 'identity' else f'{op11} {op12}'
       p2 = vocab.VOCAB2[arch[index*6+3]]
       op21 = vocab.VOCAB2[arch[index*6+4]]
       op22 = vocab.VOCAB2[arch[index*6+5]]
-      if op21 == 'identity':
-        op2 = op21
-      else: 
-        op2 = '{} {}'.format(op21, op22)
+      op2 = op21 if op21 == 'identity' else f'{op21} {op22}'
       node = [name, p1, p2, op1 ,op2]
     dag[name] = node
   return dag
@@ -49,7 +43,7 @@ with open(args.arch_file, 'r') as fin:
   lines = [list(map(int, line.split())) for line in lines]
   N = len(lines)
   for index in range(N):
-    with open(os.path.join(args.output_dir,'dag.{}.json'.format(index+1)), 'w') as fout:
+    with open(os.path.join(args.output_dir, f'dag.{index + 1}.json'), 'w') as fout:
       dag = lines[index]
       conv_dag = dag[:len(dag)//2]
       reduc_dag = dag[len(dag)//2:]

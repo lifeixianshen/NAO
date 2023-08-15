@@ -33,13 +33,12 @@ class NAOCellSearch(NAOCell):
     c0, h0 = torch.split(xh_prev.mm(self._W0), self.nhid, dim=-1)
     c0 = c0.sigmoid()
     h0 = h0.tanh()
-    s0 = h_prev + c0 * (h0-h_prev)
-    return s0
+    return h_prev + c0 * (h0-h_prev)
 
   def cell(self, x, h_prev, x_mask, h_mask, arch=None):
     assert arch is not None
     s0 = self._compute_init_state(x, h_prev, x_mask, h_mask)
-  
+
     states = [s0]
     for i in range(STEPS):
       pred, act = arch[2 * i], arch[2 * i + 1]
@@ -60,8 +59,7 @@ class NAOCellSearch(NAOCell):
       h = fn(h)
       s = s_prev + c * (h - s_prev)
       states.append(s)
-    output = torch.mean(torch.stack(states, -1), dim=-1)
-    return output
+    return torch.mean(torch.stack(states, -1), dim=-1)
 
   def forward(self, inputs, hidden, arch=None):
     T, B = inputs.size(0), inputs.size(1)
@@ -105,34 +103,32 @@ class RNNModelSearch(RNNModel):
       return self.last_arch
     
     def forward(self, input, hidden, arch=None, return_h=False):
-        assert arch is not None
-        self.last_arch = arch
-        batch_size = input.size(1)
+      assert arch is not None
+      self.last_arch = arch
+      batch_size = input.size(1)
 
-        emb = embedded_dropout(self.encoder, input, dropout=self.dropoute if self.training else 0)
-        emb = self.lockdrop(emb, self.dropouti)
+      emb = embedded_dropout(self.encoder, input, dropout=self.dropoute if self.training else 0)
+      emb = self.lockdrop(emb, self.dropouti)
 
-        raw_output = emb
-        new_hidden = []
-        raw_outputs = []
-        outputs = []
-        for l, rnn in enumerate(self.rnns):
-            raw_output, new_h = rnn(raw_output, hidden[l], arch=arch)
-            new_hidden.append(new_h)
-            raw_outputs.append(raw_output)
-        hidden = new_hidden
+      raw_output = emb
+      new_hidden = []
+      raw_outputs = []
+      for l, rnn in enumerate(self.rnns):
+          raw_output, new_h = rnn(raw_output, hidden[l], arch=arch)
+          new_hidden.append(new_h)
+          raw_outputs.append(raw_output)
+      hidden = new_hidden
 
-        output = self.lockdrop(raw_output, self.dropout)
-        outputs.append(output)
+      output = self.lockdrop(raw_output, self.dropout)
+      outputs = [output]
+      logit = self.decoder(output.view(-1, self.ninp))
+      log_prob = nn.functional.log_softmax(logit, dim=-1)
+      model_output = log_prob
+      model_output = model_output.view(-1, batch_size, self.ntoken)
 
-        logit = self.decoder(output.view(-1, self.ninp))
-        log_prob = nn.functional.log_softmax(logit, dim=-1)
-        model_output = log_prob
-        model_output = model_output.view(-1, batch_size, self.ntoken)
-
-        if return_h:
-            return model_output, hidden, raw_outputs, outputs
-        return model_output, hidden
+      if return_h:
+          return model_output, hidden, raw_outputs, outputs
+      return model_output, hidden
 
 
 def train(train_data, model, parallel_model, optimizer, params, epoch):
@@ -211,7 +207,7 @@ def train(train_data, model, parallel_model, optimizer, params, epoch):
 def evaluate(data_source, model, parallel_model, params, batch_size=10):
   # Turn on evaluation mode which disables dropout.
   arch_pool = params['arch_pool']
-  logging.info('Evaluating on {} archs'.format(len(arch_pool)))
+  logging.info(f'Evaluating on {len(arch_pool)} archs')
   start_time = time.time()
   valid_score_list = []
   for arch in arch_pool:

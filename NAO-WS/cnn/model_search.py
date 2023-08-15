@@ -65,7 +65,7 @@ def conv(x, filter_size, out_filters, stride, name="conv", padding="SAME",
   elif data_format == "NCHW":
     actual_data_format = "channels_first"
   else:
-    raise NotImplementedError("Unknown data_format {}".format(data_format))
+    raise NotImplementedError(f"Unknown data_format {data_format}")
   x = tf.layers.conv2d(
       x, out_filters, [filter_size, filter_size], stride, padding,
       data_format=actual_data_format,
@@ -95,7 +95,7 @@ def max_pool(x, k_size, stride, padding="SAME", data_format="NHWC",
   elif data_format == "NCHW":
     actual_data_format = "channels_first"
   else:
-    raise NotImplementedError("Unknown data_format {}".format(data_format))
+    raise NotImplementedError(f"Unknown data_format {data_format}")
   out = tf.layers.max_pooling2d(x, k_size, stride, padding,
                                 data_format=actual_data_format)
 
@@ -109,7 +109,7 @@ def max_pool(x, k_size, stride, padding="SAME", data_format="NHWC",
       w_pad = (x.get_shape()[3].value - out.get_shape()[3].value) // 2
       out = tf.pad(out, [[0, 0], [0, 0], [h_pad, h_pad], [w_pad, w_pad]])
     else:
-      raise NotImplementedError("Unknown data_format {}".format(data_format))
+      raise NotImplementedError(f"Unknown data_format {data_format}")
   return out
 
 
@@ -119,7 +119,7 @@ def global_avg_pool(x, data_format="NHWC"):
   elif data_format == "NCHW":
     x = tf.reduce_mean(x, [2, 3])
   else:
-    raise NotImplementedError("Unknown data_format {}".format(data_format))
+    raise NotImplementedError(f"Unknown data_format {data_format}")
   return x
 
 
@@ -130,7 +130,7 @@ def batch_norm(x, is_training, name="bn", decay=0.9, epsilon=1e-5,
   elif data_format == "NCHW":
     shape = [x.get_shape()[1]]
   else:
-    raise NotImplementedError("Unknown data_format {}".format(data_format))
+    raise NotImplementedError(f"Unknown data_format {data_format}")
 
   with tf.variable_scope(name, reuse=tf.AUTO_REUSE):
     offset = tf.get_variable(
@@ -357,11 +357,11 @@ class Model(object):
         feed_dict: can be used to give more information to sess.run().
         eval_set: "valid" or "test"
       """
-  
+      
       assert self.global_step is not None
       global_step = sess.run(self.global_step)
-      tf.logging.info("Eval at {}".format(global_step))
-  
+      tf.logging.info(f"Eval at {global_step}")
+
       if eval_set == "valid":
         assert self.x_valid is not None
         assert self.valid_acc is not None
@@ -374,11 +374,11 @@ class Model(object):
         num_batches = self.num_test_batches
         acc_op = self.test_acc
       else:
-        raise NotImplementedError("Unknown eval_set '{}'".format(eval_set))
-  
+        raise NotImplementedError(f"Unknown eval_set '{eval_set}'")
+
       total_acc = 0
       total_exp = 0
-      for batch_id in range(num_batches):
+      for _ in range(num_batches):
         acc = sess.run(acc_op, feed_dict=feed_dict)
         total_acc += acc
         total_exp += self.eval_batch_size
@@ -516,283 +516,278 @@ class Model(object):
         return [x, y]
     
     def _model(self, images, is_training, reuse=tf.AUTO_REUSE):
-        """Compute the logits given the images."""
+      """Compute the logits given the images."""
         
-        if self.fixed_arc is None:
-            is_training = True
-        
-        with tf.variable_scope(self.name, reuse=reuse):
-            # the first two inputs
-            with tf.variable_scope("stem_conv"):
-                w = create_weight("w", [3, 3, 3, self.out_filters * 3])
-                x = tf.nn.conv2d(
-                    images, w, [1, 1, 1, 1], "SAME", data_format=self.data_format)
-                x = batch_norm(x, is_training, data_format=self.data_format)
-            if self.data_format == "NHWC":
-                split_axis = 3
-            elif self.data_format == "NCHW":
-                split_axis = 1
+      if self.fixed_arc is None:
+          is_training = True
+
+      with tf.variable_scope(self.name, reuse=reuse):
+        # the first two inputs
+        with tf.variable_scope("stem_conv"):
+            w = create_weight("w", [3, 3, 3, self.out_filters * 3])
+            x = tf.nn.conv2d(
+                images, w, [1, 1, 1, 1], "SAME", data_format=self.data_format)
+            x = batch_norm(x, is_training, data_format=self.data_format)
+        if self.data_format == "NHWC":
+            split_axis = 3
+        elif self.data_format == "NCHW":
+            split_axis = 1
+        else:
+            raise ValueError("Unknown data_format '{0}'".format(self.data_format))
+        layers = [x, x]
+
+        # building layers in the micro space
+        out_filters = self.out_filters
+        for layer_id in range(self.num_layers + 2):
+          with tf.variable_scope("layer_{0}".format(layer_id)):
+            if layer_id in self.pool_layers:
+              out_filters *= 2
+              if self.fixed_arc is None:
+                  x = self._factorized_reduction(x, out_filters, 2, is_training)
+                  layers = [layers[-1], x]
+                  x = self._enas_layer(
+                      layer_id, layers, self.reduce_arc, out_filters)
+              else:
+                  x = self._fixed_layer(
+                      layer_id, layers, self.reduce_arc, out_filters, 2, is_training,
+                      normal_or_reduction_cell="reduction")
+            elif self.fixed_arc is None:
+              x = self._enas_layer(
+                  layer_id, layers, self.normal_arc, out_filters)
             else:
-                raise ValueError("Unknown data_format '{0}'".format(self.data_format))
-            layers = [x, x]
-            
-            # building layers in the micro space
-            out_filters = self.out_filters
-            for layer_id in range(self.num_layers + 2):
-                with tf.variable_scope("layer_{0}".format(layer_id)):
-                    if layer_id not in self.pool_layers:
-                        if self.fixed_arc is None:
-                            x = self._enas_layer(
-                                layer_id, layers, self.normal_arc, out_filters)
-                        else:
-                            x = self._fixed_layer(
-                                layer_id, layers, self.normal_arc, out_filters, 1, is_training,
-                                normal_or_reduction_cell="normal")
-                    else:
-                        out_filters *= 2
-                        if self.fixed_arc is None:
-                            x = self._factorized_reduction(x, out_filters, 2, is_training)
-                            layers = [layers[-1], x]
-                            x = self._enas_layer(
-                                layer_id, layers, self.reduce_arc, out_filters)
-                        else:
-                            x = self._fixed_layer(
-                                layer_id, layers, self.reduce_arc, out_filters, 2, is_training,
-                                normal_or_reduction_cell="reduction")
-                    tf.logging.info("Layer {0:>2d}: {1}".format(layer_id, x))
-                    layers = [layers[-1], x]
-                
-                # auxiliary heads
-                self.num_aux_vars = 0
-                if (self.use_aux_heads and
-                            layer_id in self.aux_head_indices
-                    and is_training):
-                    tf.logging.info("Using aux_head at layer {0}".format(layer_id))
-                    with tf.variable_scope("aux_head"):
-                        aux_logits = tf.nn.relu(x)
-                        aux_logits = tf.layers.average_pooling2d(
-                            aux_logits, [5, 5], [3, 3], "VALID",
-                            data_format=self.actual_data_format)
-                        with tf.variable_scope("proj"):
-                            inp_c = self._get_C(aux_logits)
-                            w = create_weight("w", [1, 1, inp_c, 128])
-                            aux_logits = tf.nn.conv2d(aux_logits, w, [1, 1, 1, 1], "SAME",
-                                                      data_format=self.data_format)
-                            aux_logits = batch_norm(aux_logits, is_training=True,
-                                                    data_format=self.data_format)
-                            aux_logits = tf.nn.relu(aux_logits)
-                        
-                        with tf.variable_scope("avg_pool"):
-                            inp_c = self._get_C(aux_logits)
-                            hw = self._get_HW(aux_logits)
-                            w = create_weight("w", [hw, hw, inp_c, 768])
-                            aux_logits = tf.nn.conv2d(aux_logits, w, [1, 1, 1, 1], "SAME",
-                                                      data_format=self.data_format)
-                            aux_logits = batch_norm(aux_logits, is_training=True,
-                                                    data_format=self.data_format)
-                            aux_logits = tf.nn.relu(aux_logits)
-                        
-                        with tf.variable_scope("fc"):
-                            aux_logits = global_avg_pool(aux_logits,
-                                                         data_format=self.data_format)
-                            inp_c = aux_logits.get_shape()[1].value
-                            w = create_weight("w", [inp_c, 10])
-                            aux_logits = tf.matmul(aux_logits, w)
-                            self.aux_logits = aux_logits
-                    
-                    aux_head_variables = [
-                        var for var in tf.trainable_variables() if (
-                            var.name.startswith(self.name) and "aux_head" in var.name)]
-                    self.num_aux_vars = count_model_params(aux_head_variables)
-                    tf.logging.info("Aux head uses {0} params".format(self.num_aux_vars))
-            
-            x = tf.nn.relu(x)
-            x = global_avg_pool(x, data_format=self.data_format)
-            if is_training and self.keep_prob is not None and self.keep_prob < 1.0:
-                x = tf.nn.dropout(x, self.keep_prob)
-            with tf.variable_scope("fc"):
-                inp_c = self._get_C(x)
-                w = create_weight("w", [inp_c, 10])
-                x = tf.matmul(x, w)
-        return x
+              x = self._fixed_layer(
+                  layer_id, layers, self.normal_arc, out_filters, 1, is_training,
+                  normal_or_reduction_cell="normal")
+            tf.logging.info("Layer {0:>2d}: {1}".format(layer_id, x))
+            layers = [layers[-1], x]
+
+          # auxiliary heads
+          self.num_aux_vars = 0
+          if (self.use_aux_heads and
+                      layer_id in self.aux_head_indices
+              and is_training):
+              tf.logging.info("Using aux_head at layer {0}".format(layer_id))
+              with tf.variable_scope("aux_head"):
+                  aux_logits = tf.nn.relu(x)
+                  aux_logits = tf.layers.average_pooling2d(
+                      aux_logits, [5, 5], [3, 3], "VALID",
+                      data_format=self.actual_data_format)
+                  with tf.variable_scope("proj"):
+                      inp_c = self._get_C(aux_logits)
+                      w = create_weight("w", [1, 1, inp_c, 128])
+                      aux_logits = tf.nn.conv2d(aux_logits, w, [1, 1, 1, 1], "SAME",
+                                                data_format=self.data_format)
+                      aux_logits = batch_norm(aux_logits, is_training=True,
+                                              data_format=self.data_format)
+                      aux_logits = tf.nn.relu(aux_logits)
+
+                  with tf.variable_scope("avg_pool"):
+                      inp_c = self._get_C(aux_logits)
+                      hw = self._get_HW(aux_logits)
+                      w = create_weight("w", [hw, hw, inp_c, 768])
+                      aux_logits = tf.nn.conv2d(aux_logits, w, [1, 1, 1, 1], "SAME",
+                                                data_format=self.data_format)
+                      aux_logits = batch_norm(aux_logits, is_training=True,
+                                              data_format=self.data_format)
+                      aux_logits = tf.nn.relu(aux_logits)
+
+                  with tf.variable_scope("fc"):
+                      aux_logits = global_avg_pool(aux_logits,
+                                                   data_format=self.data_format)
+                      inp_c = aux_logits.get_shape()[1].value
+                      w = create_weight("w", [inp_c, 10])
+                      aux_logits = tf.matmul(aux_logits, w)
+                      self.aux_logits = aux_logits
+
+              aux_head_variables = [
+                  var for var in tf.trainable_variables() if (
+                      var.name.startswith(self.name) and "aux_head" in var.name)]
+              self.num_aux_vars = count_model_params(aux_head_variables)
+              tf.logging.info("Aux head uses {0} params".format(self.num_aux_vars))
+
+        x = tf.nn.relu(x)
+        x = global_avg_pool(x, data_format=self.data_format)
+        if is_training and self.keep_prob is not None and self.keep_prob < 1.0:
+            x = tf.nn.dropout(x, self.keep_prob)
+        with tf.variable_scope("fc"):
+            inp_c = self._get_C(x)
+            w = create_weight("w", [inp_c, 10])
+            x = tf.matmul(x, w)
+      return x
     
     def _fixed_conv(self, x, f_size, out_filters, stride, is_training,
                     stack_convs=2):
-        """Apply fixed convolution.
+      """Apply fixed convolution.
 
     Args:
       stacked_convs: number of separable convs to apply.
     """
         
-        for conv_id in range(stack_convs):
-            inp_c = self._get_C(x)
-            if conv_id == 0:
-                strides = self._get_strides(stride)
-            else:
-                strides = [1, 1, 1, 1]
-            
-            with tf.variable_scope("sep_conv_{}".format(conv_id)):
-                w_depthwise = create_weight("w_depth", [f_size, f_size, inp_c, 1])
-                w_pointwise = create_weight("w_point", [1, 1, inp_c, out_filters])
-                x = tf.nn.relu(x)
-                x = tf.nn.separable_conv2d(
-                    x,
-                    depthwise_filter=w_depthwise,
-                    pointwise_filter=w_pointwise,
-                    strides=strides, padding="SAME", data_format=self.data_format)
-                x = batch_norm(x, is_training, data_format=self.data_format)
-        
-        return x
+      for conv_id in range(stack_convs):
+        inp_c = self._get_C(x)
+        strides = self._get_strides(stride) if conv_id == 0 else [1, 1, 1, 1]
+        with tf.variable_scope(f"sep_conv_{conv_id}"):
+          w_depthwise = create_weight("w_depth", [f_size, f_size, inp_c, 1])
+          w_pointwise = create_weight("w_point", [1, 1, inp_c, out_filters])
+          x = tf.nn.relu(x)
+          x = tf.nn.separable_conv2d(
+              x,
+              depthwise_filter=w_depthwise,
+              pointwise_filter=w_pointwise,
+              strides=strides, padding="SAME", data_format=self.data_format)
+          x = batch_norm(x, is_training, data_format=self.data_format)
+
+      return x
     
     def _fixed_combine(self, layers, used, out_filters, is_training,
                        normal_or_reduction_cell="normal"):
-        """Adjust if necessary.
+      """Adjust if necessary.
 
     Args:
       layers: a list of tf tensors of size [NHWC] of [NCHW].
       used: a numpy tensor, [0] means not used.
     """
         
-        out_hw = min([self._get_HW(layer)
-                      for i, layer in enumerate(layers) if used[i] == 0])
-        out = []
-        
-        with tf.variable_scope("final_combine"):
-            for i, layer in enumerate(layers):
-                if used[i] == 0:
-                    hw = self._get_HW(layer)
-                    if hw > out_hw:
-                        assert hw == out_hw * 2, ("i_hw={0} != {1}=o_hw".format(hw, out_hw))
-                        with tf.variable_scope("calibrate_{0}".format(i)):
-                            x = self._factorized_reduction(layer, out_filters, 2, is_training)
-                    else:
-                        x = layer
-                    out.append(x)
-            
-            if self.data_format == "NHWC":
-                out = tf.concat(out, axis=3)
-            elif self.data_format == "NCHW":
-                out = tf.concat(out, axis=1)
-            else:
-                raise ValueError("Unknown data_format '{0}'".format(self.data_format))
-        
-        return out
+      out_hw = min(
+          self._get_HW(layer) for i, layer in enumerate(layers) if used[i] == 0)
+      out = []
+
+      with tf.variable_scope("final_combine"):
+          for i, layer in enumerate(layers):
+              if used[i] == 0:
+                  hw = self._get_HW(layer)
+                  if hw > out_hw:
+                      assert hw == out_hw * 2, ("i_hw={0} != {1}=o_hw".format(hw, out_hw))
+                      with tf.variable_scope("calibrate_{0}".format(i)):
+                          x = self._factorized_reduction(layer, out_filters, 2, is_training)
+                  else:
+                      x = layer
+                  out.append(x)
+
+          if self.data_format == "NHWC":
+              out = tf.concat(out, axis=3)
+          elif self.data_format == "NCHW":
+              out = tf.concat(out, axis=1)
+          else:
+              raise ValueError("Unknown data_format '{0}'".format(self.data_format))
+
+      return out
     
     def _fixed_layer(self, layer_id, prev_layers, arc, out_filters, stride,
                      is_training, normal_or_reduction_cell="normal"):
-        """
+      """
     Args:
       prev_layers: cache of previous layers. for skip connections
       is_training: for batch_norm
     """
         
-        assert len(prev_layers) == 2
-        layers = [prev_layers[0], prev_layers[1]]
-        layers = self._maybe_calibrate_size(layers, out_filters,
-                                            is_training=is_training)
-        
-        with tf.variable_scope("layer_base"):
-            x = layers[1]
-            inp_c = self._get_C(x)
-            w = create_weight("w", [1, 1, inp_c, out_filters])
-            x = tf.nn.relu(x)
-            x = tf.nn.conv2d(x, w, [1, 1, 1, 1], "SAME",
-                             data_format=self.data_format)
-            x = batch_norm(x, is_training, data_format=self.data_format)
-            layers[1] = x
-        
-        used = np.zeros([self.num_cells + 2], dtype=np.int32)
-        f_sizes = [3, 5]
-        for cell_id in range(self.num_cells):
-            with tf.variable_scope("cell_{}".format(cell_id)):
-                x_id = arc[4 * cell_id]
-                used[x_id] += 1
-                x_op = arc[4 * cell_id + 1]
-                x = layers[x_id]
-                x_stride = stride if x_id in [0, 1] else 1
-                with tf.variable_scope("x_conv"):
-                    if x_op in [0, 1]:
-                        f_size = f_sizes[x_op]
-                        x = self._fixed_conv(x, f_size, out_filters, x_stride, is_training)
-                    elif x_op in [2, 3]:
-                        inp_c = self._get_C(x)
-                        if x_op == 2:
-                            x = tf.layers.average_pooling2d(
-                                x, [3, 3], [x_stride, x_stride], "SAME",
-                                data_format=self.actual_data_format)
-                        else:
-                            x = tf.layers.max_pooling2d(
-                                x, [3, 3], [x_stride, x_stride], "SAME",
-                                data_format=self.actual_data_format)
-                        if inp_c != out_filters:
-                            w = create_weight("w", [1, 1, inp_c, out_filters])
-                            x = tf.nn.relu(x)
-                            x = tf.nn.conv2d(x, w, [1, 1, 1, 1], "SAME",
-                                             data_format=self.data_format)
-                            x = batch_norm(x, is_training, data_format=self.data_format)
-                    else:
-                        inp_c = self._get_C(x)
-                        if x_stride > 1:
-                            assert x_stride == 2
-                            x = self._factorized_reduction(x, out_filters, 2, is_training)
-                        if inp_c != out_filters:
-                            w = create_weight("w", [1, 1, inp_c, out_filters])
-                            x = tf.nn.relu(x)
-                            x = tf.nn.conv2d(x, w, [1, 1, 1, 1], "SAME", data_format=self.data_format)
-                            x = batch_norm(x, is_training, data_format=self.data_format)
-                    if (x_op in [0, 1, 2, 3] and
-                                self.drop_path_keep_prob is not None and
-                            is_training):
-                        x = self._apply_drop_path(x, layer_id)
-                
-                y_id = arc[4 * cell_id + 2]
-                used[y_id] += 1
-                y_op = arc[4 * cell_id + 3]
-                y = layers[y_id]
-                y_stride = stride if y_id in [0, 1] else 1
-                with tf.variable_scope("y_conv"):
-                    if y_op in [0, 1]:
-                        f_size = f_sizes[y_op]
-                        y = self._fixed_conv(y, f_size, out_filters, y_stride, is_training)
-                    elif y_op in [2, 3]:
-                        inp_c = self._get_C(y)
-                        if y_op == 2:
-                            y = tf.layers.average_pooling2d(
-                                y, [3, 3], [y_stride, y_stride], "SAME",
-                                data_format=self.actual_data_format)
-                        else:
-                            y = tf.layers.max_pooling2d(
-                                y, [3, 3], [y_stride, y_stride], "SAME",
-                                data_format=self.actual_data_format)
-                        if inp_c != out_filters:
-                            w = create_weight("w", [1, 1, inp_c, out_filters])
-                            y = tf.nn.relu(y)
-                            y = tf.nn.conv2d(y, w, [1, 1, 1, 1], "SAME",
-                                             data_format=self.data_format)
-                            y = batch_norm(y, is_training, data_format=self.data_format)
-                    else:
-                        inp_c = self._get_C(y)
-                        if y_stride > 1:
-                            assert y_stride == 2
-                            y = self._factorized_reduction(y, out_filters, 2, is_training)
-                        if inp_c != out_filters:
-                            w = create_weight("w", [1, 1, inp_c, out_filters])
-                            y = tf.nn.relu(y)
-                            y = tf.nn.conv2d(y, w, [1, 1, 1, 1], "SAME",
-                                             data_format=self.data_format)
-                            y = batch_norm(y, is_training, data_format=self.data_format)
-                    
-                    if (y_op in [0, 1, 2, 3] and
-                                self.drop_path_keep_prob is not None and
-                            is_training):
-                        y = self._apply_drop_path(y, layer_id)
-                
-                out = x + y
-                layers.append(out)
-        out = self._fixed_combine(layers, used, out_filters, is_training,
-                                  normal_or_reduction_cell)
-        
-        return out
+      assert len(prev_layers) == 2
+      layers = [prev_layers[0], prev_layers[1]]
+      layers = self._maybe_calibrate_size(layers, out_filters,
+                                          is_training=is_training)
+
+      with tf.variable_scope("layer_base"):
+          x = layers[1]
+          inp_c = self._get_C(x)
+          w = create_weight("w", [1, 1, inp_c, out_filters])
+          x = tf.nn.relu(x)
+          x = tf.nn.conv2d(x, w, [1, 1, 1, 1], "SAME",
+                           data_format=self.data_format)
+          x = batch_norm(x, is_training, data_format=self.data_format)
+          layers[1] = x
+
+      used = np.zeros([self.num_cells + 2], dtype=np.int32)
+      f_sizes = [3, 5]
+      for cell_id in range(self.num_cells):
+        with tf.variable_scope(f"cell_{cell_id}"):
+          x_id = arc[4 * cell_id]
+          used[x_id] += 1
+          x_op = arc[4 * cell_id + 1]
+          x = layers[x_id]
+          x_stride = stride if x_id in [0, 1] else 1
+          with tf.variable_scope("x_conv"):
+              if x_op in [0, 1]:
+                  f_size = f_sizes[x_op]
+                  x = self._fixed_conv(x, f_size, out_filters, x_stride, is_training)
+              elif x_op in [2, 3]:
+                  inp_c = self._get_C(x)
+                  if x_op == 2:
+                      x = tf.layers.average_pooling2d(
+                          x, [3, 3], [x_stride, x_stride], "SAME",
+                          data_format=self.actual_data_format)
+                  else:
+                      x = tf.layers.max_pooling2d(
+                          x, [3, 3], [x_stride, x_stride], "SAME",
+                          data_format=self.actual_data_format)
+                  if inp_c != out_filters:
+                      w = create_weight("w", [1, 1, inp_c, out_filters])
+                      x = tf.nn.relu(x)
+                      x = tf.nn.conv2d(x, w, [1, 1, 1, 1], "SAME",
+                                       data_format=self.data_format)
+                      x = batch_norm(x, is_training, data_format=self.data_format)
+              else:
+                  inp_c = self._get_C(x)
+                  if x_stride > 1:
+                      assert x_stride == 2
+                      x = self._factorized_reduction(x, out_filters, 2, is_training)
+                  if inp_c != out_filters:
+                      w = create_weight("w", [1, 1, inp_c, out_filters])
+                      x = tf.nn.relu(x)
+                      x = tf.nn.conv2d(x, w, [1, 1, 1, 1], "SAME", data_format=self.data_format)
+                      x = batch_norm(x, is_training, data_format=self.data_format)
+              if (x_op in [0, 1, 2, 3] and
+                          self.drop_path_keep_prob is not None and
+                      is_training):
+                  x = self._apply_drop_path(x, layer_id)
+
+          y_id = arc[4 * cell_id + 2]
+          used[y_id] += 1
+          y_op = arc[4 * cell_id + 3]
+          y = layers[y_id]
+          y_stride = stride if y_id in [0, 1] else 1
+          with tf.variable_scope("y_conv"):
+              if y_op in [0, 1]:
+                  f_size = f_sizes[y_op]
+                  y = self._fixed_conv(y, f_size, out_filters, y_stride, is_training)
+              elif y_op in [2, 3]:
+                  inp_c = self._get_C(y)
+                  if y_op == 2:
+                      y = tf.layers.average_pooling2d(
+                          y, [3, 3], [y_stride, y_stride], "SAME",
+                          data_format=self.actual_data_format)
+                  else:
+                      y = tf.layers.max_pooling2d(
+                          y, [3, 3], [y_stride, y_stride], "SAME",
+                          data_format=self.actual_data_format)
+                  if inp_c != out_filters:
+                      w = create_weight("w", [1, 1, inp_c, out_filters])
+                      y = tf.nn.relu(y)
+                      y = tf.nn.conv2d(y, w, [1, 1, 1, 1], "SAME",
+                                       data_format=self.data_format)
+                      y = batch_norm(y, is_training, data_format=self.data_format)
+              else:
+                  inp_c = self._get_C(y)
+                  if y_stride > 1:
+                      assert y_stride == 2
+                      y = self._factorized_reduction(y, out_filters, 2, is_training)
+                  if inp_c != out_filters:
+                      w = create_weight("w", [1, 1, inp_c, out_filters])
+                      y = tf.nn.relu(y)
+                      y = tf.nn.conv2d(y, w, [1, 1, 1, 1], "SAME",
+                                       data_format=self.data_format)
+                      y = batch_norm(y, is_training, data_format=self.data_format)
+
+              if (y_op in [0, 1, 2, 3] and
+                          self.drop_path_keep_prob is not None and
+                      is_training):
+                  y = self._apply_drop_path(y, layer_id)
+
+          out = x + y
+          layers.append(out)
+      out = self._fixed_combine(layers, used, out_filters, is_training,
+                                normal_or_reduction_cell)
+
+      return out
     
     def _enas_cell(self, x, curr_cell, prev_cell, op_id, out_filters):
         """Performs an enas operation specified by op_id."""
@@ -1061,182 +1056,179 @@ class Model(object):
         self._build_test()
         
 def get_ops(images, labels, params):
-    child_model = Model(
-        images,
-        labels,
-        use_aux_heads=params['use_aux_heads'],
-        cutout_size=params['cutout_size'],
-        num_layers=params['num_layers'],
-        num_cells=params['num_cells'],
-        fixed_arc=params['fixed_arc'],
-        out_filters_scale=params['out_filters_scale'],
-        out_filters=params['out_filters'],
-        keep_prob=params['keep_prob'],
-        drop_path_keep_prob=params['drop_path_keep_prob'],
-        num_epochs=params['num_epochs'],
-        l2_reg=params['l2_reg'],
-        data_format=params['data_format'],
-        batch_size=params['batch_size'],
-        eval_batch_size=params['eval_batch_size'],
-        clip_mode="norm",
-        grad_bound=params['grad_bound'],
-        lr_init=params['lr'],
-        lr_dec_every=params['lr_dec_every'],
-        lr_dec_rate=params['lr_dec_rate'],
-        lr_cosine=params['lr_cosine'],
-        lr_max=params['lr_max'],
-        lr_min=params['lr_min'],
-        lr_T_0=params['lr_T_0'],
-        lr_T_mul=params['lr_T_mul'],
-        optim_algo="momentum",
-        sync_replicas=params['sync_replicas'],
-        num_aggregate=params['num_aggregate'],
-        num_replicas=params['num_replicas'],
-    )
-    if params['fixed_arc'] is None:
-        child_model.connect_controller(params['arch_pool'], params['arch_pool_prob'])
-    else:
-        child_model.connect_controller(None, None)
-    ops = {
-        "global_step": child_model.global_step,
-        "loss": child_model.loss,
-        "train_op": child_model.train_op,
-        "lr": child_model.lr,
-        "grad_norm": child_model.grad_norm,
-        "train_acc": child_model.train_acc,
-        "optimizer": child_model.optimizer,
-        "num_train_batches": child_model.num_train_batches,
-        "eval_every": child_model.num_train_batches * params['eval_every_epochs'],
-        "eval_func": child_model.eval_once,
-    }
-    return ops
+  child_model = Model(
+      images,
+      labels,
+      use_aux_heads=params['use_aux_heads'],
+      cutout_size=params['cutout_size'],
+      num_layers=params['num_layers'],
+      num_cells=params['num_cells'],
+      fixed_arc=params['fixed_arc'],
+      out_filters_scale=params['out_filters_scale'],
+      out_filters=params['out_filters'],
+      keep_prob=params['keep_prob'],
+      drop_path_keep_prob=params['drop_path_keep_prob'],
+      num_epochs=params['num_epochs'],
+      l2_reg=params['l2_reg'],
+      data_format=params['data_format'],
+      batch_size=params['batch_size'],
+      eval_batch_size=params['eval_batch_size'],
+      clip_mode="norm",
+      grad_bound=params['grad_bound'],
+      lr_init=params['lr'],
+      lr_dec_every=params['lr_dec_every'],
+      lr_dec_rate=params['lr_dec_rate'],
+      lr_cosine=params['lr_cosine'],
+      lr_max=params['lr_max'],
+      lr_min=params['lr_min'],
+      lr_T_0=params['lr_T_0'],
+      lr_T_mul=params['lr_T_mul'],
+      optim_algo="momentum",
+      sync_replicas=params['sync_replicas'],
+      num_aggregate=params['num_aggregate'],
+      num_replicas=params['num_replicas'],
+  )
+  if params['fixed_arc'] is None:
+      child_model.connect_controller(params['arch_pool'], params['arch_pool_prob'])
+  else:
+      child_model.connect_controller(None, None)
+  return {
+      "global_step": child_model.global_step,
+      "loss": child_model.loss,
+      "train_op": child_model.train_op,
+      "lr": child_model.lr,
+      "grad_norm": child_model.grad_norm,
+      "train_acc": child_model.train_acc,
+      "optimizer": child_model.optimizer,
+      "num_train_batches": child_model.num_train_batches,
+      "eval_every":
+      child_model.num_train_batches * params['eval_every_epochs'],
+      "eval_func": child_model.eval_once,
+  }
 
 def train(params):
-    g = tf.Graph()
-    with g.as_default():
-        images, labels = read_data(params['data_dir'])
-        child_ops = get_ops(images, labels, params)
-        saver = tf.train.Saver(max_to_keep=100)
-        checkpoint_saver_hook = tf.train.CheckpointSaverHook(
-            params['model_dir'], save_steps=child_ops["num_train_batches"], saver=saver)
-        
-        hooks = [checkpoint_saver_hook]
+  g = tf.Graph()
+  with g.as_default():
+    images, labels = read_data(params['data_dir'])
+    child_ops = get_ops(images, labels, params)
+    saver = tf.train.Saver(max_to_keep=100)
+    checkpoint_saver_hook = tf.train.CheckpointSaverHook(
+        params['model_dir'], save_steps=child_ops["num_train_batches"], saver=saver)
+
+    hooks = [checkpoint_saver_hook]
+    if params['sync_replicas']:
+        sync_replicas_hook = child_ops["optimizer"].make_session_run_hook(True)
+        hooks.append(sync_replicas_hook)
+
+    tf.logging.info("-" * 80)
+    tf.logging.info("Starting session")
+    config = tf.ConfigProto(allow_soft_placement=True)
+    with tf.train.SingularMonitoredSession(
+                config=config, hooks=hooks, checkpoint_dir=params['model_dir']) as sess:
+      start_time = time.time()
+      while True:
+        run_ops = [
+            child_ops["loss"],
+            child_ops["lr"],
+            child_ops["grad_norm"],
+            child_ops["train_acc"],
+            child_ops["train_op"],
+        ]
+        loss, lr, gn, tr_acc, _ = sess.run(run_ops)
+        global_step = sess.run(child_ops["global_step"])
+
         if params['sync_replicas']:
-            sync_replicas_hook = child_ops["optimizer"].make_session_run_hook(True)
-            hooks.append(sync_replicas_hook)
-        
-        tf.logging.info("-" * 80)
-        tf.logging.info("Starting session")
-        config = tf.ConfigProto(allow_soft_placement=True)
-        with tf.train.SingularMonitoredSession(
-            config=config, hooks=hooks, checkpoint_dir=params['model_dir']) as sess:
-            start_time = time.time()
-            while True:
-                run_ops = [
-                    child_ops["loss"],
-                    child_ops["lr"],
-                    child_ops["grad_norm"],
-                    child_ops["train_acc"],
-                    child_ops["train_op"],
-                ]
-                loss, lr, gn, tr_acc, _ = sess.run(run_ops)
-                global_step = sess.run(child_ops["global_step"])
-                
-                if params['sync_replicas']:
-                    actual_step = global_step * params['num_aggregate']
-                else:
-                    actual_step = global_step
-                epoch = actual_step // child_ops["num_train_batches"]
-                curr_time = time.time()
-                if global_step % 50 == 0:
-                    log_string = ""
-                    log_string += "epoch={:<6d}".format(epoch)
-                    log_string += "ch_step={:<6d}".format(global_step)
-                    log_string += " loss={:<8.6f}".format(loss)
-                    log_string += " lr={:<8.4f}".format(lr)
-                    log_string += " |g|={:<8.4f}".format(gn)
-                    log_string += " tr_acc={:<3d}/{:>3d}".format(tr_acc, params['batch_size'])
-                    log_string += " mins={:<10.2f}".format(float(curr_time - start_time) / 60)
-                    tf.logging.info(log_string)
-                
-                if actual_step % child_ops["eval_every"] == 0:
-                    return epoch
+            actual_step = global_step * params['num_aggregate']
+        else:
+            actual_step = global_step
+        epoch = actual_step // child_ops["num_train_batches"]
+        curr_time = time.time()
+        if global_step % 50 == 0:
+          log_string = "" + "epoch={:<6d}".format(epoch)
+          log_string += "ch_step={:<6d}".format(global_step)
+          log_string += " loss={:<8.6f}".format(loss)
+          log_string += " lr={:<8.4f}".format(lr)
+          log_string += " |g|={:<8.4f}".format(gn)
+          log_string += " tr_acc={:<3d}/{:>3d}".format(tr_acc, params['batch_size'])
+          log_string += " mins={:<10.2f}".format(float(curr_time - start_time) / 60)
+          tf.logging.info(log_string)
+
+        if actual_step % child_ops["eval_every"] == 0:
+            return epoch
 
 def get_valid_ops(images, labels, params):
-    child_model = Model(
-        images,
-        labels,
-        use_aux_heads=params['use_aux_heads'],
-        cutout_size=params['cutout_size'],
-        num_layers=params['num_layers'],
-        num_cells=params['num_cells'],
-        fixed_arc=params['fixed_arc'],
-        out_filters_scale=params['out_filters_scale'],
-        out_filters=params['out_filters'],
-        keep_prob=params['keep_prob'],
-        drop_path_keep_prob=params['drop_path_keep_prob'],
-        num_epochs=params['num_epochs'],
-        l2_reg=params['l2_reg'],
-        data_format=params['data_format'],
-        batch_size=params['batch_size'],
-        eval_batch_size=params['eval_batch_size'],
-        clip_mode="norm",
-        grad_bound=params['grad_bound'],
-        lr_init=params['lr'],
-        lr_dec_every=params['lr_dec_every'],
-        lr_dec_rate=params['lr_dec_rate'],
-        lr_cosine=params['lr_cosine'],
-        lr_max=params['lr_max'],
-        lr_min=params['lr_min'],
-        lr_T_0=params['lr_T_0'],
-        lr_T_mul=params['lr_T_mul'],
-        optim_algo="momentum",
-        sync_replicas=params['sync_replicas'],
-        num_aggregate=params['num_aggregate'],
-        num_replicas=params['num_replicas'],
-    )
-    if params['fixed_arc'] is None:
-        arch_pool = tf.convert_to_tensor(params['arch_pool'], dtype=tf.int32)
-        arch_pool = tf.data.Dataset.from_tensor_slices(arch_pool)
-        arch_pool = arch_pool.map(lambda x: (x[0], x[1]))
-        iterator = arch_pool.make_one_shot_iterator()
-        conv_arch, reduc_arch = iterator.get_next()
-        child_model.normal_arc = conv_arch
-        child_model.reduce_arc = reduc_arch
-        child_model._build_valid()
-        valid_acc = tf.cast(child_model.valid_acc / child_model.eval_batch_size, tf.float32)
-        ops = {
-            "valid_acc": valid_acc,
-        }
-    else:
-        child_model.connect_controller(None, None)
-        ops = {
-            "valid_acc": child_model.valid_acc / child_model.eval_batch_size,
-        }
-    return ops
+  child_model = Model(
+      images,
+      labels,
+      use_aux_heads=params['use_aux_heads'],
+      cutout_size=params['cutout_size'],
+      num_layers=params['num_layers'],
+      num_cells=params['num_cells'],
+      fixed_arc=params['fixed_arc'],
+      out_filters_scale=params['out_filters_scale'],
+      out_filters=params['out_filters'],
+      keep_prob=params['keep_prob'],
+      drop_path_keep_prob=params['drop_path_keep_prob'],
+      num_epochs=params['num_epochs'],
+      l2_reg=params['l2_reg'],
+      data_format=params['data_format'],
+      batch_size=params['batch_size'],
+      eval_batch_size=params['eval_batch_size'],
+      clip_mode="norm",
+      grad_bound=params['grad_bound'],
+      lr_init=params['lr'],
+      lr_dec_every=params['lr_dec_every'],
+      lr_dec_rate=params['lr_dec_rate'],
+      lr_cosine=params['lr_cosine'],
+      lr_max=params['lr_max'],
+      lr_min=params['lr_min'],
+      lr_T_0=params['lr_T_0'],
+      lr_T_mul=params['lr_T_mul'],
+      optim_algo="momentum",
+      sync_replicas=params['sync_replicas'],
+      num_aggregate=params['num_aggregate'],
+      num_replicas=params['num_replicas'],
+  )
+  if params['fixed_arc'] is None:
+    arch_pool = tf.convert_to_tensor(params['arch_pool'], dtype=tf.int32)
+    arch_pool = tf.data.Dataset.from_tensor_slices(arch_pool)
+    arch_pool = arch_pool.map(lambda x: (x[0], x[1]))
+    iterator = arch_pool.make_one_shot_iterator()
+    conv_arch, reduc_arch = iterator.get_next()
+    child_model.normal_arc = conv_arch
+    child_model.reduce_arc = reduc_arch
+    child_model._build_valid()
+    valid_acc = tf.cast(child_model.valid_acc / child_model.eval_batch_size, tf.float32)
+    return {
+        "valid_acc": valid_acc,
+    }
+  else:
+    child_model.connect_controller(None, None)
+    return {
+        "valid_acc": child_model.valid_acc / child_model.eval_batch_size,
+    }
 
 def valid(params):
-    g = tf.Graph()
-    with g.as_default():
-        images, labels = read_data(params['data_dir'])
-        child_ops = get_valid_ops(images, labels, params)
-        tf.logging.info("-" * 80)
-        tf.logging.info("Starting session")
-        config = tf.ConfigProto(allow_soft_placement=True)
-        N = len(params['arch_pool'])
-        valid_acc_list = []
-        with tf.train.SingularMonitoredSession(
-            config=config, checkpoint_dir=params['model_dir']) as sess:
-            start_time = time.time()
-            for i in range(N):
-                run_ops = [
-                    child_ops["valid_acc"],
-                ]
-                valid_acc, = sess.run(run_ops)
-                valid_acc_list.append(float(valid_acc))
-            curr_time = time.time()
-            log_string = ""
-            log_string += " valid_acc={:<6.6f}".format(np.mean(valid_acc_list))
-            log_string += " mins={:<10.2f}".format(float(curr_time - start_time) / 60)
-            tf.logging.info(log_string)
-        return valid_acc_list
+  g = tf.Graph()
+  with g.as_default():
+    images, labels = read_data(params['data_dir'])
+    child_ops = get_valid_ops(images, labels, params)
+    tf.logging.info("-" * 80)
+    tf.logging.info("Starting session")
+    config = tf.ConfigProto(allow_soft_placement=True)
+    N = len(params['arch_pool'])
+    valid_acc_list = []
+    with tf.train.SingularMonitoredSession(
+                config=config, checkpoint_dir=params['model_dir']) as sess:
+      start_time = time.time()
+      for _ in range(N):
+        run_ops = [
+            child_ops["valid_acc"],
+        ]
+        valid_acc, = sess.run(run_ops)
+        valid_acc_list.append(float(valid_acc))
+      curr_time = time.time()
+      log_string = "" + " valid_acc={:<6.6f}".format(np.mean(valid_acc_list))
+      log_string += " mins={:<10.2f}".format(float(curr_time - start_time) / 60)
+      tf.logging.info(log_string)
+    return valid_acc_list

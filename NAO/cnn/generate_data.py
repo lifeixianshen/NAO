@@ -16,13 +16,12 @@ B=5
 
 def generate_symmetry(dag):
   i = random.randint(0,B-1)
-  new_dag = dag[:6*i] + dag[6*i+3:6*i+6] + dag[6*i:6*i+3] + dag[6*(i+1):]
-  return new_dag
+  return dag[:6*i] + dag[6*i+3:6*i+6] + dag[6*i:6*i+3] + dag[6*(i+1):]
 
 def parse_dag(cell):
   dag = []
   for i in range(3, B+2+1):
-    name = 'node_{}'.format(i)
+    name = f'node_{i}'
     node = cell[name]
     prev_node1 = vocab.VOCAB1.index(node[1])
     prev_node2 = vocab.VOCAB1.index(node[2])
@@ -57,7 +56,7 @@ all_data = list(map(lambda x:int(x.split()[-1].split('.')[0]), all_data))
 all_data = sorted(all_data)
 N=len(all_data)
 for index in range(1,1001):
-  with open(os.path.join(dag_folder, 'dag.{}.json'.format(index)), 'r') as f:
+  with open(os.path.join(dag_folder, f'dag.{index}.json'), 'r') as f:
     content = json.load(f)
     conv_dag = content['conv_dag']
     reduc_dag = content['reduc_dag']
@@ -70,7 +69,7 @@ for index in range(1,1001):
     inputs.append(dag)
     symmetry_inputs.append(symmetry_dag)
 
-  with open(os.path.join(score_folder, '{}.score'.format(index)), 'r') as f:
+  with open(os.path.join(score_folder, f'{index}.score'), 'r') as f:
     all_err = f.read().splitlines()
     all_err = list(map(float, all_err))
     #all_err = sorted(all_err)
@@ -99,11 +98,11 @@ test_gt_target = open('test.target.ground_truth', 'w')
 
 for i in range(N):
   if i < 50:
-    test_input.write('{}\n'.format(inputs[i]))
-    test_target.write('{}\n'.format(norm_targets[i]))
-    test_gt_target.write('{}\n'.format(targets[i]))
+    test_input.write(f'{inputs[i]}\n')
+    test_target.write(f'{norm_targets[i]}\n')
+    test_gt_target.write(f'{targets[i]}\n')
   else:
-    train_input.write('{}\n'.format(inputs[i]))
-    train_symmetry_input.write('{}\n'.format(symmetry_inputs[i]))
-    train_target.write('{}\n'.format(norm_targets[i]))
-    train_gt_target.write('{}\n'.format(targets[i]))
+    train_input.write(f'{inputs[i]}\n')
+    train_symmetry_input.write(f'{symmetry_inputs[i]}\n')
+    train_target.write(f'{norm_targets[i]}\n')
+    train_gt_target.write(f'{targets[i]}\n')

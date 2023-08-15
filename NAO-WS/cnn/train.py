@@ -101,7 +101,7 @@ def train():
     tf.logging.info("Starting session")
     config = tf.ConfigProto(allow_soft_placement=True)
     with tf.train.SingularMonitoredSession(
-        config=config, hooks=hooks, checkpoint_dir=params['model_dir']) as sess:
+            config=config, hooks=hooks, checkpoint_dir=params['model_dir']) as sess:
       start_time = time.time()
       while True:
         run_ops = [
@@ -113,7 +113,7 @@ def train():
         ]
         loss, lr, gn, tr_acc, _ = sess.run(run_ops)
         global_step = sess.run(ops["global_step"])
-    
+
         if params['sync_replicas']:
           actual_step = global_step * params['num_aggregate']
         else:
@@ -121,8 +121,7 @@ def train():
         epoch = actual_step // ops["num_train_batches"]
         curr_time = time.time()
         if global_step % 50 == 0:
-          log_string = ""
-          log_string += "epoch={:<6d}".format(epoch)
+          log_string = "" + "epoch={:<6d}".format(epoch)
           log_string += "ch_step={:<6d}".format(global_step)
           log_string += " loss={:<8.6f}".format(loss)
           log_string += " lr={:<8.4f}".format(lr)
@@ -130,47 +129,46 @@ def train():
           log_string += " tr_acc={:<3d}/{:>3d}".format(tr_acc, params['batch_size'])
           log_string += " mins={:<10.2f}".format(float(curr_time - start_time) / 60)
           tf.logging.info(log_string)
-    
+
         if actual_step % ops["eval_every"] == 0:
           ops["eval_func"](sess, "test")
-        
+
         if epoch >= params['num_epochs']:
           tf.logging.info('Training finished!')
           break
   
 def get_child_model_params():
-  params = {
-    'data_dir': FLAGS.data_path,
-    'model_dir': FLAGS.output_dir,
-    'batch_size': FLAGS.child_batch_size,
-    'eval_batch_size': FLAGS.child_eval_batch_size,
-    'num_epochs': FLAGS.child_num_epochs,
-    'lr_dec_every': FLAGS.child_lr_dec_every,
-    'num_layers': FLAGS.child_num_layers,
-    'num_cells': FLAGS.child_num_cells,
-    'out_filters': FLAGS.child_out_filters,
-    'out_filters_scale': FLAGS.child_out_filters_scale,
-    'num_aggregate': FLAGS.child_num_aggregate,
-    'num_replicas': FLAGS.child_num_replicas,
-    'lr_T_0': FLAGS.child_lr_T_0,
-    'lr_T_mul': FLAGS.child_lr_T_mul,
-    'cutout_size': FLAGS.child_cutout_size,
-    'grad_bound': FLAGS.child_grad_bound,
-    'lr_dec_rate': FLAGS.child_lr_dec_rate,
-    'lr_max': FLAGS.child_lr_max,
-    'lr_min': FLAGS.child_lr_min,
-    'drop_path_keep_prob': FLAGS.child_drop_path_keep_prob,
-    'keep_prob': FLAGS.child_keep_prob,
-    'l2_reg': FLAGS.child_l2_reg,
-    'fixed_arc': FLAGS.child_fixed_arc,
-    'use_aux_heads': FLAGS.child_use_aux_heads,
-    'sync_replicas': FLAGS.child_sync_replicas,
-    'lr_cosine': FLAGS.child_lr_cosine,
-    'eval_every_epochs': FLAGS.child_eval_every_epochs,
-    'data_format': FLAGS.child_data_format,
-    'lr': FLAGS.child_lr,
+  return {
+      'data_dir': FLAGS.data_path,
+      'model_dir': FLAGS.output_dir,
+      'batch_size': FLAGS.child_batch_size,
+      'eval_batch_size': FLAGS.child_eval_batch_size,
+      'num_epochs': FLAGS.child_num_epochs,
+      'lr_dec_every': FLAGS.child_lr_dec_every,
+      'num_layers': FLAGS.child_num_layers,
+      'num_cells': FLAGS.child_num_cells,
+      'out_filters': FLAGS.child_out_filters,
+      'out_filters_scale': FLAGS.child_out_filters_scale,
+      'num_aggregate': FLAGS.child_num_aggregate,
+      'num_replicas': FLAGS.child_num_replicas,
+      'lr_T_0': FLAGS.child_lr_T_0,
+      'lr_T_mul': FLAGS.child_lr_T_mul,
+      'cutout_size': FLAGS.child_cutout_size,
+      'grad_bound': FLAGS.child_grad_bound,
+      'lr_dec_rate': FLAGS.child_lr_dec_rate,
+      'lr_max': FLAGS.child_lr_max,
+      'lr_min': FLAGS.child_lr_min,
+      'drop_path_keep_prob': FLAGS.child_drop_path_keep_prob,
+      'keep_prob': FLAGS.child_keep_prob,
+      'l2_reg': FLAGS.child_l2_reg,
+      'fixed_arc': FLAGS.child_fixed_arc,
+      'use_aux_heads': FLAGS.child_use_aux_heads,
+      'sync_replicas': FLAGS.child_sync_replicas,
+      'lr_cosine': FLAGS.child_lr_cosine,
+      'eval_every_epochs': FLAGS.child_eval_every_epochs,
+      'data_format': FLAGS.child_data_format,
+      'lr': FLAGS.child_lr,
   }
-  return params
 
 def main(unused_argv):
   # Using the Winograd non-fused algorithms provides a small performance boost.

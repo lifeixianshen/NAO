@@ -484,7 +484,7 @@ def get_test_ops(x, y, params, reuse=False):
 
 def train(params):
   g = tf.Graph()
-  with g.as_default(), tf.device('/cpu:0'):
+  with (g.as_default(), tf.device('/cpu:0')):
     tf.set_random_seed(params['seed'])
     x_train, y_train = input_fn(params['split_train_valid'], 'train', params['data_dir'], params['dataset'], params['batch_size'], params['cutout_size'], None)
     if params['split_train_valid']:
@@ -504,7 +504,7 @@ def train(params):
     tf.logging.info('Starting Session')
     config = tf.ConfigProto(allow_soft_placement=True)
     with tf.train.SingularMonitoredSession(
-      config=config, hooks=hooks, checkpoint_dir=params['model_dir']) as sess:
+          config=config, hooks=hooks, checkpoint_dir=params['model_dir']) as sess:
       start_time = time.time()
       while True:
         run_ops = [
@@ -516,11 +516,11 @@ def train(params):
         ]
         train_loss_v, learning_rate_v, train_accuracy_v, _, global_step_v = sess.run(run_ops)
 
-        epoch = global_step_v // params['batches_per_epoch'] 
+        epoch = global_step_v // params['batches_per_epoch']
         curr_time = time.time()
         if global_step_v % 100 == 0:
-          log_string = "epoch={:<6d} ".format(epoch)
-          log_string += "step={:<6d} ".format(global_step_v)
+          log_string = "epoch={:<6d} ".format(epoch) + "step={:<6d} ".format(
+              global_step_v)
           log_string += "loss={:<6f} ".format(train_loss_v)
           log_string += "learning_rate={:<8.4f} ".format(learning_rate_v)
           log_string += "training_accuracy={:<8.4f} ".format(train_accuracy_v)
@@ -539,15 +539,14 @@ def train(params):
               valid_loss_list.append(valid_loss_v)
               valid_accuracy_list.append(valid_accuracy_v)
             valid_time = time.time() - valid_start_time
-            log_string =  "Evaluation on valid data\n"
-            log_string += "epoch={:<6d} ".format(epoch)
+            log_string = "Evaluation on valid data\n" + "epoch={:<6d} ".format(epoch)
             log_string += "step={:<6d} ".format(global_step_v)
             log_string += "loss={:<6f} ".format(np.mean(valid_loss_list))
             log_string += "learning_rate={:<8.6f} ".format(learning_rate_v)
             log_string += "valid_accuracy={:<8.6f} ".format(np.mean(valid_accuracy_list))
             log_string += "secs={:<10.2f}".format((valid_time))
             tf.logging.info(log_string)
-          
+
           test_ops = [
             test_loss, test_accuracy
           ]
@@ -559,8 +558,7 @@ def train(params):
             test_loss_list.append(test_loss_v)
             test_accuracy_list.append(test_accuracy_v)
           test_time = time.time() - test_start_time
-          log_string =  "Evaluation on test data\n"
-          log_string += "epoch={:<6d} ".format(epoch)
+          log_string = "Evaluation on test data\n" + "epoch={:<6d} ".format(epoch)
           log_string += "step={:<6d} ".format(global_step_v)
           log_string += "loss={:<6f} ".format(np.mean(test_loss_list))
           log_string += "learning_rate={:<8.6f} ".format(learning_rate_v)
@@ -573,7 +571,7 @@ def train(params):
 
 def build_dag(dag_name_or_path):
   try:
-    conv_dag, reduc_dag = eval('dag.{}()'.format(dag_name_or_path))
+    conv_dag, reduc_dag = eval(f'dag.{dag_name_or_path}()')
   except:
     try:
       with open(os.path.join(dag_name_or_path), 'r') as f:
@@ -587,18 +585,18 @@ def build_dag(dag_name_or_path):
 
 def get_params():
   conv_dag, reduc_dag = build_dag(FLAGS.arch)
-  
+
   if FLAGS.split_train_valid:
     total_steps = int(FLAGS.train_epochs * _NUM_IMAGES['train'] / float(FLAGS.batch_size))
   else:
     total_steps = int(FLAGS.train_epochs * (_NUM_IMAGES['train'] + _NUM_IMAGES['valid']) / float(FLAGS.batch_size))
-  
+
   params = vars(FLAGS)
   if params['dataset'] == 'cifar10':
     params['num_classes'] = 10
   elif params['dataset'] == 'cifar100':
     params['num_classes'] = 100
-    
+
   params['conv_dag'] = conv_dag
   params['reduc_dag'] = reduc_dag
   params['total_steps'] = total_steps
@@ -606,11 +604,11 @@ def get_params():
   if FLAGS.hparams is not None:
     with open(os.path.join(FLAGS.hparams), 'r') as f:
       hparams = json.load(f)
-      params.update(hparams)
- 
+      params |= hparams
+
   if params['conv_dag'] is None or params['reduc_dag'] is None:
     raise ValueError('You muse specify a registered model name or provide a model in the hparams.')
-  
+
   return params 
 
 
@@ -623,9 +621,6 @@ def main(unused_argv):
     with open(os.path.join(params['model_dir'], 'hparams.json'), 'w') as f:
       json.dump(params, f)
     train(params)
-
-  elif FLAGS.mode == 'test':
-    pass
 
 
 if __name__ == '__main__':

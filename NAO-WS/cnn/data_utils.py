@@ -63,8 +63,8 @@ def read_data(data_path, num_valids=5000):
   mean = np.mean(images["train"], axis=(0, 1, 2), keepdims=True)
   std = np.std(images["train"], axis=(0, 1, 2), keepdims=True)
 
-  tf.logging.info("mean: {}".format(np.reshape(mean * 255.0, [-1])))
-  tf.logging.info("std: {}".format(np.reshape(std * 255.0, [-1])))
+  tf.logging.info(f"mean: {np.reshape(mean * 255.0, [-1])}")
+  tf.logging.info(f"std: {np.reshape(std * 255.0, [-1])}")
 
   images["train"] = (images["train"] - mean) / std
   if num_valids:

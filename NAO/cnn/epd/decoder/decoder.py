@@ -46,7 +46,7 @@ class AttentionMultiCell(tf.nn.rnn_cell.MultiRNNCell):
           cur_state = state[i]
 
           if not isinstance(cur_state, tf.contrib.rnn.LSTMStateTuple):
-            raise TypeError("`state[{}]` must be a LSTMStateTuple".format(i))
+            raise TypeError(f"`state[{i}]` must be a LSTMStateTuple")
 		# we always use new attention v2, where the attention output  from the first layer is broadcast to all layers after that. 
 		#it is emprically much better than using the attention input to the first layers with all subsequent layers.
           if self.use_new_attention:
@@ -273,7 +273,7 @@ class Decoder():
         'normed_bahdanau', self.hidden_size, memory, source_sequence_length)
 
     cell_list = []
-    for i in range(self.num_layers):
+    for _ in range(self.num_layers):
       lstm_cell = tf.contrib.rnn.LSTMCell(
         self.hidden_size,
         initializer=tf.orthogonal_initializer())
@@ -293,11 +293,10 @@ class Decoder():
         alignment_history=alignment_history,
         name='attention')
       cell = AttentionMultiCell(attention_cell, cell_list)
+    elif len(cell_list) == 1:
+      cell = cell_list[0]
     else:
-      if len(cell_list) == 1:
-        cell = cell_list[0]
-      else:
-        cell = tf.contrib.rnn.MultiRNNCell(cell_list)
+      cell = tf.contrib.rnn.MultiRNNCell(cell_list)
 
     if self.pass_hidden_state:
       #decoder_initial_state = cell.zero_state(batch_size, tf.float32).clone(cell_state=encoder_state)
@@ -331,7 +330,7 @@ class Decoder():
         memory_sequence_length=source_sequence_length,
         normalize=True)
     else:
-      raise ValueError("Unknown attention option %s" % attention_option)
+      raise ValueError(f"Unknown attention option {attention_option}")
 
     return attention_mechanism
 
@@ -372,7 +371,7 @@ class Model(object):
     self.build_graph(scope=scope)
 
   def build_graph(self, scope=None):
-    tf.logging.info("# creating %s graph ..." % self.mode)
+    tf.logging.info(f"# creating {self.mode} graph ...")
     ## Decoder
     with tf.variable_scope(scope):
       # Embeddings

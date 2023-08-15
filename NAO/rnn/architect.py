@@ -37,8 +37,7 @@ class Architect(object):
     grads = torch.autograd.grad(loss, self.model.parameters())
     _clip(grads, self.network_clip)
     dtheta = _concat(grads).data + self.network_weight_decay*theta
-    model_unrolled = self._construct_model_from_theta(theta.sub(eta, dtheta))
-    return model_unrolled
+    return self._construct_model_from_theta(theta.sub(eta, dtheta))
 
   def step(self, hidden_train, input_train, target_train,
           hidden_valid, input_valid, target_valid, network_optimizer, unrolled):
